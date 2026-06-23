@@ -9,7 +9,7 @@ import type { Client } from '@/lib/supabase'
 const STATUSES = ['Prospect', 'Demo Booked', 'Closed', 'Active', 'Churned']
 const NICHES = ['Plumber', 'Roofer', 'HVAC', 'Landscaper', 'Electrician', 'Painter', 'Pest Control', 'Cleaning', 'Other']
 
-export default function ClientDetail({ client }: { client: Client }) {
+export default function ClientDetail({ client, hideHeader }: { client: Client; hideHeader?: boolean }) {
   const router = useRouter()
   const [form, setForm] = useState({
     business_name: client.business_name || '',
@@ -97,14 +97,16 @@ export default function ClientDetail({ client }: { client: Client }) {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="flex items-center gap-4 mb-6">
-        <Link href="/clients" className="text-sm" style={{ color: '#a0a0c0' }}>← Clients</Link>
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold" style={{ color: '#ffffff' }}>{client.business_name}</h1>
-          <StatusBadge status={form.status} />
+    <div>
+      {!hideHeader && (
+        <div className="flex items-center gap-4 mb-6">
+          <Link href="/clients" className="text-sm" style={{ color: '#a0a0c0' }}>← Clients</Link>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold" style={{ color: '#ffffff' }}>{client.business_name}</h1>
+            <StatusBadge status={form.status} />
+          </div>
         </div>
-      </div>
+      )}
 
       <form onSubmit={handleSave} className="space-y-6">
 
@@ -283,3 +285,4 @@ export default function ClientDetail({ client }: { client: Client }) {
     </div>
   )
 }
+

@@ -1,6 +1,7 @@
 import { createServerClient } from '@/lib/supabase-server'
 import Nav from '@/components/Nav'
 import ClientDetail from './ClientDetail'
+import ClientTabs from './ClientTabs'
 import { notFound } from 'next/navigation'
 
 export const revalidate = 0
@@ -14,14 +15,12 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
     .eq('id', id)
     .single()
 
-  if (!client) {
-    notFound()
-  }
+  if (!client) notFound()
 
   return (
     <div style={{ backgroundColor: '#1a1a2e', minHeight: '100vh' }}>
       <Nav />
-      <ClientDetail client={client} />
+      <ClientTabs client={client} />
     </div>
   )
 }
