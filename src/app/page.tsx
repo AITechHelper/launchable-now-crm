@@ -19,17 +19,25 @@ export default async function DashboardPage() {
     .filter((c) => c.status === 'Active')
     .reduce((sum: number, c: { monthly_recurring?: number | null }) => sum + (c.monthly_recurring || 0), 0)
 
+  const totalOneTimeFees = allClients
+    .filter((c) => c.one_time_fee_collected)
+    .reduce((sum: number, c: { one_time_fee_amount?: number | null }) => sum + (c.one_time_fee_amount || 0), 0)
+
+  const totalRevenue = totalOneTimeFees + totalMRR
+
   const activeCount = allClients.filter((c: { status: string }) => c.status === 'Active').length
   const pipelineCount = allClients.filter((c: { status: string }) => c.status === 'Prospect' || c.status === 'Demo Booked').length
   const closedCount = allClients.filter((c: { status: string }) => c.status === 'Closed' || c.status === 'Active').length
 
   const recentClients = allClients.slice(0, 10)
 
+  const fmt = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 0 })}`
+
   const stats = [
-    { label: 'Total MRR', value: `$${totalMRR.toLocaleString('en-US', { minimumFractionDigits: 0 })}`, color: '#00FFB2' },
-    { label: 'Active Clients', value: activeCount.toString(), color: '#00FFB2' },
-    { label: 'Pipeline', value: pipelineCount.toString(), color: '#7B2FFF' },
-    { label: 'Total Closed', value: closedCount.toString(), color: '#6699FF' },
+    { label: 'Total Revenue', value: fmt(totalRevenue), sub: `${fmt(totalOneTimeFees)} fees + ${fmt(totalMRR)} MRR`, color: '#00FFB2' },
+    { label: 'Monthly MRR', value: fmt(totalMRR), sub: `from ${activeCount} active client${activeCount !== 1 ? 's' : ''}`, color: '#00FFB2' },
+    { label: 'Pipeline', value: pipelineCount.toString(), sub: 'Prospect + Demo Booked', color: '#9B5FFF' },
+    { label: 'Total Closed', value: closedCount.toString(), sub: 'Closed + Active', color: '#6699FF' },
   ]
 
   return (
@@ -43,6 +51,7 @@ export default async function DashboardPage() {
             <div key={stat.label} className="rounded-xl p-6" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
               <p className="text-sm mb-1" style={{ color: '#a0a0c0' }}>{stat.label}</p>
               <p className="text-3xl font-bold" style={{ color: stat.color }}>{stat.value}</p>
+              <p className="text-xs mt-1" style={{ color: '#6060a0' }}>{stat.sub}</p>
             </div>
           ))}
         </div>
