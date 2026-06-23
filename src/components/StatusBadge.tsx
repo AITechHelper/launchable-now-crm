@@ -1,6 +1,6 @@
 export default function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, { bg: string; color: string }> = {
-    Prospect: { bg: '#1E1E32', color: '#5A5A7A' },
+    Prospect: { bg: '#3a3a5c', color: '#a0a0c0' },
     'Demo Booked': { bg: '#2D1B6E', color: '#7B2FFF' },
     Closed: { bg: '#1B2A6E', color: '#6699FF' },
     Active: { bg: '#003D2B', color: '#00FFB2' },

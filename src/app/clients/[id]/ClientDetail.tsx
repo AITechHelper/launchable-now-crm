@@ -72,25 +72,25 @@ export default function ClientDetail({ client }: { client: Client }) {
   }
 
   const inputStyle = {
-    backgroundColor: '#08080F',
-    border: '1px solid #1E1E32',
-    color: '#F0F0FF',
+    backgroundColor: '#1a1a2e',
+    border: '1px solid #3a3a5c',
+    color: '#ffffff',
   }
-  const labelStyle = { color: '#5A5A7A' }
+  const labelStyle = { color: '#a0a0c0' }
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex items-center gap-4 mb-6">
-        <Link href="/clients" className="text-sm" style={{ color: '#5A5A7A' }}>← Clients</Link>
+        <Link href="/clients" className="text-sm" style={{ color: '#a0a0c0' }}>← Clients</Link>
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold" style={{ color: '#F0F0FF' }}>{client.business_name}</h1>
+          <h1 className="text-2xl font-bold" style={{ color: '#ffffff' }}>{client.business_name}</h1>
           <StatusBadge status={form.status} />
         </div>
       </div>
 
       <form onSubmit={handleSave} className="space-y-6">
-        <div className="rounded-xl p-6 space-y-4" style={{ backgroundColor: '#10101C', border: '1px solid #1E1E32' }}>
-          <h2 className="font-semibold" style={{ color: '#F0F0FF' }}>Business Info</h2>
+        <div className="rounded-xl p-6 space-y-4" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
+          <h2 className="font-semibold" style={{ color: '#ffffff' }}>Business Info</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm mb-1" style={labelStyle}>Business Name *</label>
@@ -140,8 +140,8 @@ export default function ClientDetail({ client }: { client: Client }) {
           </div>
         </div>
 
-        <div className="rounded-xl p-6 space-y-4" style={{ backgroundColor: '#10101C', border: '1px solid #1E1E32' }}>
-          <h2 className="font-semibold" style={{ color: '#F0F0FF' }}>Financials</h2>
+        <div className="rounded-xl p-6 space-y-4" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
+          <h2 className="font-semibold" style={{ color: '#ffffff' }}>Financials</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm mb-1" style={labelStyle}>One-Time Fee Amount ($)</label>
@@ -161,8 +161,8 @@ export default function ClientDetail({ client }: { client: Client }) {
           </div>
         </div>
 
-        <div className="rounded-xl p-6 space-y-4" style={{ backgroundColor: '#10101C', border: '1px solid #1E1E32' }}>
-          <h2 className="font-semibold" style={{ color: '#F0F0FF' }}>Website & Links</h2>
+        <div className="rounded-xl p-6 space-y-4" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
+          <h2 className="font-semibold" style={{ color: '#ffffff' }}>Website & Links</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm mb-1" style={labelStyle}>Demo Site URL</label>
@@ -192,23 +192,23 @@ export default function ClientDetail({ client }: { client: Client }) {
           </div>
         </div>
 
-        <div className="rounded-xl p-6 space-y-4" style={{ backgroundColor: '#10101C', border: '1px solid #1E1E32' }}>
-          <h2 className="font-semibold" style={{ color: '#F0F0FF' }}>Notes</h2>
+        <div className="rounded-xl p-6 space-y-4" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
+          <h2 className="font-semibold" style={{ color: '#ffffff' }}>Notes</h2>
           <textarea name="notes" value={form.notes} onChange={handleChange} rows={4}
             className="w-full px-4 py-2 rounded-lg text-sm outline-none resize-none"
             style={inputStyle} placeholder="Any additional notes..." />
         </div>
 
-        <div className="rounded-xl p-4" style={{ backgroundColor: '#10101C', border: '1px solid #1E1E32' }}>
+        <div className="rounded-xl p-4" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
             <div>
-              <span style={{ color: '#5A5A7A' }}>Added</span>
-              <p style={{ color: '#F0F0FF' }}>{new Date(client.date_added).toLocaleDateString()}</p>
+              <span style={{ color: '#a0a0c0' }}>Added</span>
+              <p style={{ color: '#ffffff' }}>{new Date(client.date_added).toLocaleDateString()}</p>
             </div>
             {client.date_closed && (
               <div>
-                <span style={{ color: '#5A5A7A' }}>Closed</span>
-                <p style={{ color: '#F0F0FF' }}>{new Date(client.date_closed).toLocaleDateString()}</p>
+                <span style={{ color: '#a0a0c0' }}>Closed</span>
+                <p style={{ color: '#ffffff' }}>{new Date(client.date_closed).toLocaleDateString()}</p>
               </div>
             )}
           </div>
@@ -218,11 +218,11 @@ export default function ClientDetail({ client }: { client: Client }) {
           <div className="flex gap-3">
             <button type="submit" disabled={saving}
               className="px-6 py-2 rounded-lg font-medium text-sm disabled:opacity-50 transition-colors"
-              style={{ backgroundColor: '#00FFB2', color: '#08080F' }}>
+              style={{ backgroundColor: '#00FFB2', color: '#1a1a2e' }}>
               {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Changes'}
             </button>
             <Link href="/clients" className="px-6 py-2 rounded-lg font-medium text-sm"
-              style={{ backgroundColor: '#1E1E32', color: '#F0F0FF' }}>
+              style={{ backgroundColor: '#3a3a5c', color: '#ffffff' }}>
               Cancel
             </Link>
           </div>

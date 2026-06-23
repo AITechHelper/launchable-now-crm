@@ -19,7 +19,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
   }
 
   return (
-    <div style={{ backgroundColor: '#08080F', minHeight: '100vh' }}>
+    <div style={{ backgroundColor: '#1a1a2e', minHeight: '100vh' }}>
       <Nav />
       <ClientDetail client={client} />
     </div>

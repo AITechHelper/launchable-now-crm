@@ -18,7 +18,7 @@ export default function Nav() {
   ]
 
   return (
-    <nav className="border-b" style={{ backgroundColor: '#10101C', borderColor: '#1E1E32' }}>
+    <nav className="border-b" style={{ backgroundColor: '#252540', borderColor: '#3a3a5c' }}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center gap-8">
@@ -32,8 +32,8 @@ export default function Nav() {
                     href={link.href}
                     className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
                     style={{
-                      backgroundColor: isActive ? '#1E1E32' : 'transparent',
-                      color: isActive ? '#F0F0FF' : '#5A5A7A',
+                      backgroundColor: isActive ? '#3a3a5c' : 'transparent',
+                      color: isActive ? '#ffffff' : '#a0a0c0',
                     }}
                   >
                     {link.label}
@@ -45,7 +45,7 @@ export default function Nav() {
           <button
             onClick={handleLogout}
             className="text-sm px-4 py-2 rounded-lg transition-colors"
-            style={{ color: '#5A5A7A' }}
+            style={{ color: '#a0a0c0' }}
           >
             Logout
           </button>

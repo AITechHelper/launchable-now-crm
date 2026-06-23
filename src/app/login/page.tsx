@@ -25,17 +25,17 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#08080F' }}>
+    <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#1a1a2e' }}>
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold mb-1" style={{ color: '#00FFB2' }}>Launchable Now</h1>
-          <p style={{ color: '#5A5A7A' }}>CRM Dashboard</p>
+          <p style={{ color: '#a0a0c0' }}>CRM Dashboard</p>
         </div>
 
-        <div className="rounded-xl p-8" style={{ backgroundColor: '#10101C', border: '1px solid #1E1E32' }}>
+        <div className="rounded-xl p-8" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-2" style={{ color: '#5A5A7A' }}>
+              <label className="block text-sm font-medium mb-2" style={{ color: '#a0a0c0' }}>
                 Password
               </label>
               <input
@@ -44,9 +44,9 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-4 py-3 rounded-lg text-sm outline-none transition-colors"
                 style={{
-                  backgroundColor: '#08080F',
-                  border: '1px solid #1E1E32',
-                  color: '#F0F0FF',
+                  backgroundColor: '#1a1a2e',
+                  border: '1px solid #3a3a5c',
+                  color: '#ffffff',
                 }}
                 placeholder="Enter your password"
                 required
@@ -62,7 +62,7 @@ export default function LoginPage() {
               type="submit"
               disabled={loading}
               className="w-full py-3 rounded-lg font-semibold text-sm transition-opacity disabled:opacity-50"
-              style={{ backgroundColor: '#00FFB2', color: '#08080F' }}
+              style={{ backgroundColor: '#00FFB2', color: '#1a1a2e' }}
             >
               {loading ? 'Entering...' : 'Enter'}
             </button>
