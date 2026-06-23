@@ -88,9 +88,11 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
       fd.append('leadId', lead.id)
       fd.append('file', file)
       const res = await fetch('/api/leads/upload', { method: 'POST', body: fd })
+      const data = await res.json()
       if (res.ok) {
-        const data = await res.json()
         uploaded.push(data)
+      } else {
+        alert(`Upload failed: ${data.error || 'Unknown error'}`)
       }
     }
     setFiles((prev) => [...prev, ...uploaded])

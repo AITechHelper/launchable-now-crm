@@ -20,11 +20,12 @@ export async function POST(request: NextRequest) {
   const path = `leads/${leadId}/${filename}`
 
   const bytes = await file.arrayBuffer()
+  const buffer = Buffer.from(bytes)
   const { error } = await supabase.storage
     .from('lead-assets')
-    .upload(path, bytes, { contentType: file.type, upsert: false })
+    .upload(path, buffer, { contentType: file.type || 'application/octet-stream', upsert: false })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return NextResponse.json({ error: error.message, path, bucket: 'lead-assets' }, { status: 500 })
 
   const { data: { publicUrl } } = supabase.storage
     .from('lead-assets')
