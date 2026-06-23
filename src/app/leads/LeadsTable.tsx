@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
@@ -26,6 +26,10 @@ const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
 export default function LeadsTable({ initialLeads }: { initialLeads: Lead[] }) {
   const router = useRouter()
   const [leads, setLeads] = useState(initialLeads)
+
+  useEffect(() => {
+    setLeads(initialLeads)
+  }, [initialLeads])
   const [tab, setTab] = useState('All')
   const [search, setSearch] = useState('')
   const [updating, setUpdating] = useState<string | null>(null)
