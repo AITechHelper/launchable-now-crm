@@ -5,9 +5,10 @@ import { notFound } from 'next/navigation'
 
 export const revalidate = 0
 
-export default async function LeadPage({ params }: { params: { id: string } }) {
+export default async function LeadPage({ params }: { params: Promise<{ id: string }> }) {
   const supabase = createServerClient()
-  const { data: lead } = await supabase.from('leads').select('*').eq('id', params.id).single()
+  const { id } = await params
+  const { data: lead } = await supabase.from('leads').select('*').eq('id', id).single()
   if (!lead) notFound()
 
   return (
