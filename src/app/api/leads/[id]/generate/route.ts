@@ -57,6 +57,23 @@ export async function POST(
         if (!lead) return error('Lead not found')
         send(`  Lead: ${lead.business_name}`)
 
+        // 2b. Fetch uploaded assets from Supabase storage
+        const { data: storageFiles } = await supabase.storage
+          .from('lead-assets')
+          .list(`leads/${id}`, { limit: 20 })
+
+        const assetUrls: string[] = (storageFiles || []).map((f: { name: string }) => {
+          const { data: { publicUrl } } = supabase.storage
+            .from('lead-assets')
+            .getPublicUrl(`leads/${id}/${f.name}`)
+          return publicUrl
+        })
+
+        const logoUrl = assetUrls[0] || null
+        const photoUrls = assetUrls.slice(1)
+        if (logoUrl) send(`  Found ${assetUrls.length} uploaded asset(s)`)
+        else send(`  No uploaded assets — using stock photos`)
+
         // 3. Fetch template HTML
         send('Fetching website template…')
         const tplRes = await githubApi(`/repos/${TEMPLATE_OWNER}/${TEMPLATE_REPO}/contents/index.html`)
@@ -71,7 +88,6 @@ export async function POST(
           `- ${r.name} (${r.rating}★): "${r.text}"`
         ).join('\n')
 
-        const logoUrl = lead.website_url ? '' : '' // will use logo.png placeholder
         const imageBaseUrl = RAW_BASE
 
         const prompt = `You are filling in a website template for a local business client.
@@ -96,6 +112,10 @@ CLIENT DATA:
 - Reviews:
 ${reviewsText || 'No reviews provided'}
 
+UPLOADED ASSETS:
+${logoUrl ? `- Logo/primary image: ${logoUrl}` : '- No logo uploaded — leave logo.png as-is or remove the img tag'}
+${photoUrls.length > 0 ? `- Additional photos:\n${photoUrls.map((u, i) => `  Photo ${i + 1}: ${u}`).join('\n')}` : '- No additional photos uploaded'}
+
 INSTRUCTIONS:
 1. Replace ALL [PLACEHOLDER] values in the HTML with real content for this client
 2. Update the CSS :root variables at the top:
@@ -104,8 +124,11 @@ INSTRUCTIONS:
    - --primary-light should be a lighter version (~20% lighter)
    - --primary-glow should be rgba version of primary at 0.45 opacity
    - --accent and --accent-bright: choose a complementary accent color based on their brand
-3. For image src attributes that use stock photos (AdobeStock_*.webp), prepend: ${imageBaseUrl}/
-   Example: src="AdobeStock_369759521.webp" → src="${imageBaseUrl}/AdobeStock_369759521.webp"
+3. For ALL logo img tags (src="logo.png"), replace with: ${logoUrl || 'logo.png'}
+4. For image src attributes that use stock photos (AdobeStock_*.webp):
+   - If additional photos were provided above, use them in order to replace the stock photos
+   - For any remaining stock photo slots, prepend: ${imageBaseUrl}/
+     Example: src="AdobeStock_369759521.webp" → src="${imageBaseUrl}/AdobeStock_369759521.webp"
 4. For [X]+ Years Serving — estimate based on research notes or omit the badge if unknown
 5. Write real, compelling copy for all text placeholders. Don't leave any [PLACEHOLDER] in the output.
 6. For services: use the actual services listed. Create realistic service cards with descriptions.
