@@ -14,14 +14,10 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password }),
-    })
-
-    if (res.ok) {
+    if (password === 'launchable2024') {
+      document.cookie = 'launchable_auth=authenticated; path=/; max-age=2592000'
       router.push('/')
+      router.refresh()
     } else {
       setError('Invalid password. Try again.')
       setLoading(false)
