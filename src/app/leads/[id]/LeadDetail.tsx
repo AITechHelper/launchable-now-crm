@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
@@ -77,8 +77,47 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
   const [extracted, setExtracted] = useState<Extracted | null>(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [genLogs, setGenLogs] = useState<string[]>([])
+  const [siteUrl, setSiteUrl] = useState<string | null>(null)
+  const genLogRef = useRef<HTMLDivElement>(null)
 
   const sc = STATUS_COLORS[status] || { bg: '#252540', color: '#a0a0c0' }
+
+  useEffect(() => {
+    if (genLogRef.current) genLogRef.current.scrollTop = genLogRef.current.scrollHeight
+  }, [genLogs])
+
+  async function generateSite() {
+    setGenerating(true)
+    setGenLogs([])
+    setSiteUrl(null)
+
+    const resp = await fetch(`/api/leads/${lead.id}/generate`, { method: 'POST' })
+    if (!resp.body) { setGenerating(false); return }
+
+    const reader = resp.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        try {
+          const payload = JSON.parse(line.slice(6))
+          if (payload.log) setGenLogs((prev) => [...prev, payload.log])
+          if (payload.done) setSiteUrl(payload.siteUrl)
+          if (payload.error) setGenLogs((prev) => [...prev, `❌ ERROR: ${payload.error}`])
+        } catch { /* ignore */ }
+      }
+    }
+    setGenerating(false)
+  }
 
   async function uploadFiles(fileList: FileList) {
     setUploading(true)
@@ -410,23 +449,60 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
         )}
 
         {/* Generate Website */}
-        <div className="rounded-xl p-6" style={{ backgroundColor: '#1a0d2e', border: '2px solid #7c3aed' }}>
+        <div className="rounded-xl p-6 space-y-4" style={{ backgroundColor: '#1a0d2e', border: '2px solid #7c3aed' }}>
           <div className="flex items-center justify-between">
             <div>
               <h2 className="font-semibold" style={{ color: '#ffffff' }}>Generate Website</h2>
               <p className="text-sm mt-1" style={{ color: '#a0a0c0' }}>
-                Save your research above, then generate a custom site and deploy to Vercel.
+                Claude reads the saved research and builds a custom site, then pushes it to GitHub Pages.
               </p>
             </div>
-            <button disabled
-              className="px-6 py-3 rounded-xl font-semibold text-sm opacity-50 cursor-not-allowed"
-              style={{ backgroundColor: '#7c3aed', color: '#ffffff' }}>
-              🚀 Generate Site
+            <button
+              onClick={generateSite}
+              disabled={generating}
+              className="px-6 py-3 rounded-xl font-semibold text-sm disabled:opacity-60 transition-colors"
+              style={{ backgroundColor: '#7c3aed', color: '#ffffff' }}
+            >
+              {generating ? '⚙️ Generating…' : '🚀 Generate Site'}
             </button>
           </div>
-          <p className="text-xs mt-3" style={{ color: '#6060a0' }}>
-            Coming soon — Phase 3.
-          </p>
+
+          {/* Generation log */}
+          {genLogs.length > 0 && (
+            <div
+              ref={genLogRef}
+              className="p-4 rounded-lg font-mono text-xs overflow-y-auto"
+              style={{ backgroundColor: '#0f0812', color: '#94a3b8', maxHeight: '220px', border: '1px solid #4c1d95' }}
+            >
+              {genLogs.map((l, i) => (
+                <div key={i} style={{
+                  color: l.startsWith('✅') || l.includes('✓') ? '#00FFB2'
+                    : l.startsWith('❌') ? '#ef4444'
+                    : l.startsWith('   ') ? '#c4b5fd'
+                    : '#94a3b8'
+                }}>
+                  {l}
+                </div>
+              ))}
+              {generating && <div style={{ color: '#a78bfa' }}>▋</div>}
+            </div>
+          )}
+
+          {/* Site URL result */}
+          {siteUrl && (
+            <div className="p-4 rounded-xl flex items-center justify-between" style={{ backgroundColor: '#0d1a0d', border: '1px solid #00FFB2' }}>
+              <div>
+                <p className="text-xs font-semibold mb-1" style={{ color: '#00FFB2' }}>Site is live!</p>
+                <p className="text-sm font-mono" style={{ color: '#ffffff' }}>{siteUrl}</p>
+                <p className="text-xs mt-1" style={{ color: '#6060a0' }}>May take ~1 min for GitHub Pages to go live</p>
+              </div>
+              <a href={siteUrl} target="_blank" rel="noopener noreferrer"
+                className="px-4 py-2 rounded-lg text-sm font-semibold ml-4 flex-shrink-0"
+                style={{ backgroundColor: '#00FFB2', color: '#0d1a0d' }}>
+                View Site ↗
+              </a>
+            </div>
+          )}
         </div>
 
       </div>
