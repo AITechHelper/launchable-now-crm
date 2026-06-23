@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { createServerClient } from '@/lib/supabase-server'
 
 const SEARCH_URL = 'https://places.googleapis.com/v1/places:searchText'
@@ -14,10 +14,16 @@ interface Place {
   userRatingCount?: number
 }
 
+interface Filters {
+  website: 'any' | 'none' | 'has'
+  minReviews: number
+  maxReviews: number
+  requirePhone: boolean
+}
+
 async function searchPlaces(query: string, apiKey: string, pageToken?: string) {
   const body: Record<string, unknown> = { textQuery: query, pageSize: 20 }
   if (pageToken) body.pageToken = pageToken
-
   const resp = await fetch(SEARCH_URL, {
     method: 'POST',
     headers: {
@@ -32,12 +38,43 @@ async function searchPlaces(query: string, apiKey: string, pageToken?: string) {
   return { places: (data.places || []) as Place[], nextPageToken: data.nextPageToken as string | undefined }
 }
 
+function applyFilters(place: Place, filters: Filters): string | null {
+  const rc = place.userRatingCount ?? 0
+  const hasWebsite = !!place.websiteUri
+  const hasPhone = !!place.nationalPhoneNumber
+
+  if (filters.requirePhone && !hasPhone) return 'no phone'
+  if (filters.website === 'none' && hasWebsite) return 'has website'
+  if (filters.website === 'has' && !hasWebsite) return 'no website'
+  if (rc < filters.minReviews) return `too few reviews (${rc})`
+  if (filters.maxReviews > 0 && rc > filters.maxReviews) return `too many reviews (${rc})`
+  return null
+}
+
 export async function POST(request: NextRequest) {
   const apiKey = process.env.GOOGLE_PLACES_API_KEY
-  if (!apiKey) return NextResponse.json({ error: 'GOOGLE_PLACES_API_KEY not configured.' }, { status: 500 })
+  if (!apiKey) {
+    return new Response(
+      `data: ${JSON.stringify({ error: 'GOOGLE_PLACES_API_KEY not configured.' })}\n\n`,
+      { headers: { 'Content-Type': 'text/event-stream' } }
+    )
+  }
 
-  const { city, vertical } = await request.json()
-  if (!city || !vertical) return NextResponse.json({ error: 'City and vertical required.' }, { status: 400 })
+  const body = await request.json()
+  const { city, vertical } = body
+  if (!city || !vertical) {
+    return new Response(
+      `data: ${JSON.stringify({ error: 'City and vertical required.' })}\n\n`,
+      { headers: { 'Content-Type': 'text/event-stream' } }
+    )
+  }
+
+  const filters: Filters = {
+    website:      body.website      ?? 'any',
+    minReviews:   body.minReviews   ?? 0,
+    maxReviews:   body.maxReviews   ?? 0,
+    requirePhone: body.requirePhone ?? false,
+  }
 
   const supabase = createServerClient()
   const encoder = new TextEncoder()
@@ -51,6 +88,10 @@ export async function POST(request: NextRequest) {
 
       try {
         send(`Searching: "${query}"`)
+        if (filters.website !== 'any') send(`  Filter: ${filters.website === 'none' ? 'No website only' : 'Has website only'}`)
+        if (filters.minReviews > 0) send(`  Filter: min ${filters.minReviews} reviews`)
+        if (filters.maxReviews > 0) send(`  Filter: max ${filters.maxReviews} reviews`)
+        if (filters.requirePhone) send(`  Filter: phone required`)
 
         const allPlaces: Place[] = []
         let pageToken: string | undefined
@@ -63,25 +104,22 @@ export async function POST(request: NextRequest) {
           if (!result.places.length) break
         }
 
-        send(`Total found: ${allPlaces.length} — saving to CRM…`)
+        send(`Found ${allPlaces.length} total — applying filters…`)
 
         let saved = 0, dupes = 0, skipped = 0
 
         for (let i = 0; i < allPlaces.length; i++) {
           const place = allPlaces[i]
           const name = place.displayName?.text || 'Unknown'
-          const phone = place.nationalPhoneNumber || ''
-          const website = place.websiteUri || ''
-          const address = place.formattedAddress || ''
           const placeId = place.id || ''
 
-          if (!phone) {
-            send(`  [${i + 1}] SKIP (no phone): ${name}`)
+          const skipReason = applyFilters(place, filters)
+          if (skipReason) {
+            send(`  [${i + 1}] SKIP (${skipReason}): ${name}`)
             skipped++
             continue
           }
 
-          // Check for dupe by place_id
           const { data: existing } = await supabase
             .from('leads')
             .select('id')
@@ -94,31 +132,32 @@ export async function POST(request: NextRequest) {
             continue
           }
 
+          const website = place.websiteUri || ''
           const { error } = await supabase.from('leads').insert({
             business_name: name,
-            phone,
-            address,
+            phone:         place.nationalPhoneNumber || '',
+            address:       place.formattedAddress || '',
             city,
-            niche: vertical,
-            has_website: !!website,
-            website_url: website,
-            rating: place.rating ?? null,
-            review_count: place.userRatingCount ?? null,
-            place_id: placeId,
-            status: 'new',
-            source: 'lead_finder',
+            niche:         vertical,
+            has_website:   !!website,
+            website_url:   website,
+            rating:        place.rating ?? null,
+            review_count:  place.userRatingCount ?? null,
+            place_id:      placeId,
+            status:        'new',
+            source:        'lead_finder',
           })
 
           if (error) {
             send(`  [${i + 1}] ERROR: ${error.message}`)
           } else {
             const tag = website ? 'has website' : 'NO website'
-            send(`  [${i + 1}] Saved (${tag}): ${name} — ${phone}`)
+            send(`  [${i + 1}] Saved (${tag}): ${name} — ${place.nationalPhoneNumber || 'no phone'}`)
             saved++
           }
         }
 
-        send(`✅ Done — ${saved} saved, ${dupes} dupes, ${skipped} skipped (no phone).`)
+        send(`✅ Done — ${saved} saved, ${dupes} dupes, ${skipped} filtered/skipped.`)
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, saved, dupes, skipped })}\n\n`))
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown error'

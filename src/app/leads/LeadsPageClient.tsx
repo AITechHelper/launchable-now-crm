@@ -19,9 +19,13 @@ export default function LeadsPageClient() {
   const [loading, setLoading] = useState(true)
   const [city, setCity] = useState('')
   const [vertical, setVertical] = useState('')
+  const [showFilters, setShowFilters] = useState(false)
+  const [website, setWebsite] = useState<'any' | 'none' | 'has'>('any')
+  const [minReviews, setMinReviews] = useState(0)
+  const [maxReviews, setMaxReviews] = useState(300)
+  const [requirePhone, setRequirePhone] = useState(false)
   const [searching, setSearching] = useState(false)
   const [logs, setLogs] = useState<string[]>([])
-  const [searchDone, setSearchDone] = useState(false)
   const logRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -38,13 +42,19 @@ export default function LeadsPageClient() {
   async function startSearch() {
     if (!city.trim() || !vertical.trim()) return
     setSearching(true)
-    setSearchDone(false)
     setLogs([])
 
     const resp = await fetch('/api/leads/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ city: city.trim(), vertical: vertical.trim() }),
+      body: JSON.stringify({
+        city: city.trim(),
+        vertical: vertical.trim(),
+        website,
+        minReviews,
+        maxReviews,
+        requirePhone,
+      }),
     })
 
     if (!resp.body) { setSearching(false); return }
@@ -65,34 +75,34 @@ export default function LeadsPageClient() {
           const payload = JSON.parse(line.slice(6))
           if (payload.log) setLogs((prev) => [...prev, payload.log])
           if (payload.done) {
-            setSearchDone(true)
-            // Reload leads from server
             fetch('/api/leads')
               .then((r) => r.json())
               .then((data) => setLeads(Array.isArray(data) ? data : []))
           }
           if (payload.error) setLogs((prev) => [...prev, `ERROR: ${payload.error}`])
-        } catch { /* ignore parse errors */ }
+        } catch { /* ignore */ }
       }
     }
     setSearching(false)
   }
 
+  const inputStyle = { backgroundColor: '#1a1a2e', border: '1px solid #3a3a5c', color: '#ffffff' }
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: '#ffffff' }}>Leads</h1>
-          <p className="text-sm mt-1" style={{ color: '#a0a0c0' }}>Find businesses, call them, book a meeting, build their site.</p>
-        </div>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold" style={{ color: '#ffffff' }}>Leads</h1>
+        <p className="text-sm mt-1" style={{ color: '#a0a0c0' }}>Find businesses, call them, book a meeting, build their site.</p>
       </div>
 
       {/* Search Card */}
       <div className="rounded-xl p-6 mb-6" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
         <h2 className="text-xs font-semibold uppercase tracking-widest mb-4" style={{ color: '#a0a0c0' }}>
-          Find Businesses Without a Website
+          Find Businesses
         </h2>
-        <div className="flex gap-3 flex-wrap">
+
+        {/* Main inputs */}
+        <div className="flex gap-3 flex-wrap mb-3">
           <input
             type="text"
             placeholder="City  e.g. Austin, TX"
@@ -101,7 +111,7 @@ export default function LeadsPageClient() {
             onKeyDown={(e) => e.key === 'Enter' && !searching && startSearch()}
             disabled={searching}
             className="flex-1 min-w-40 px-4 py-2 rounded-lg text-sm outline-none disabled:opacity-50"
-            style={{ backgroundColor: '#1a1a2e', border: '1px solid #3a3a5c', color: '#ffffff' }}
+            style={inputStyle}
           />
           <input
             type="text"
@@ -111,7 +121,7 @@ export default function LeadsPageClient() {
             onKeyDown={(e) => e.key === 'Enter' && !searching && startSearch()}
             disabled={searching}
             className="flex-1 min-w-48 px-4 py-2 rounded-lg text-sm outline-none disabled:opacity-50"
-            style={{ backgroundColor: '#1a1a2e', border: '1px solid #3a3a5c', color: '#ffffff' }}
+            style={inputStyle}
           />
           <button
             onClick={startSearch}
@@ -123,15 +133,83 @@ export default function LeadsPageClient() {
           </button>
         </div>
 
+        {/* Filters toggle */}
+        <button
+          onClick={() => setShowFilters((v) => !v)}
+          className="text-sm flex items-center gap-1 mb-3"
+          style={{ color: '#a0a0c0' }}
+        >
+          <span style={{ color: showFilters ? '#00FFB2' : '#a0a0c0' }}>▲</span>
+          {showFilters ? 'Hide' : 'Show'} Filters
+        </button>
+
+        {/* Filters panel */}
+        {showFilters && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-3 pb-1" style={{ borderTop: '1px solid #3a3a5c' }}>
+            <div>
+              <label className="block text-xs mb-1" style={{ color: '#a0a0c0' }}>Website</label>
+              <select
+                value={website}
+                onChange={(e) => setWebsite(e.target.value as 'any' | 'none' | 'has')}
+                className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+                style={inputStyle}
+              >
+                <option value="any">Any</option>
+                <option value="none">No Website</option>
+                <option value="has">Has Website</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs mb-1" style={{ color: '#a0a0c0' }}>Min Reviews</label>
+              <input
+                type="number"
+                value={minReviews}
+                onChange={(e) => setMinReviews(parseInt(e.target.value) || 0)}
+                className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+                style={inputStyle}
+                min={0}
+              />
+            </div>
+            <div>
+              <label className="block text-xs mb-1" style={{ color: '#a0a0c0' }}>Max Reviews</label>
+              <input
+                type="number"
+                value={maxReviews}
+                onChange={(e) => setMaxReviews(parseInt(e.target.value) || 0)}
+                className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+                style={inputStyle}
+                min={0}
+              />
+            </div>
+            <div className="flex items-end pb-2">
+              <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: '#a0a0c0' }}>
+                <input
+                  type="checkbox"
+                  checked={requirePhone}
+                  onChange={(e) => setRequirePhone(e.target.checked)}
+                  className="w-4 h-4 rounded"
+                />
+                Require Phone
+              </label>
+            </div>
+          </div>
+        )}
+
         {/* Log box */}
         {logs.length > 0 && (
           <div
             ref={logRef}
             className="mt-4 p-4 rounded-lg font-mono text-xs overflow-y-auto"
-            style={{ backgroundColor: '#0f1117', color: '#94a3b8', maxHeight: '180px', border: '1px solid #2d3148' }}
+            style={{ backgroundColor: '#0f1117', color: '#94a3b8', maxHeight: '200px', border: '1px solid #2d3148' }}
           >
             {logs.map((l, i) => (
-              <div key={i} style={{ color: l.startsWith('✅') ? '#00FFB2' : l.startsWith('ERROR') ? '#ef4444' : '#94a3b8' }}>
+              <div key={i} style={{
+                color: l.startsWith('✅') ? '#00FFB2'
+                  : l.startsWith('ERROR') ? '#ef4444'
+                  : l.includes('SKIP') ? '#6060a0'
+                  : l.includes('DUPE') ? '#6060a0'
+                  : '#94a3b8'
+              }}>
                 {l}
               </div>
             ))}
