@@ -2,8 +2,14 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl
+
+  if (pathname.startsWith('/api/')) {
+    return NextResponse.next()
+  }
+
   const authCookie = request.cookies.get('launchable_auth')
-  const isLoginPage = request.nextUrl.pathname === '/login'
+  const isLoginPage = pathname === '/login'
 
   if (!authCookie || authCookie.value !== 'authenticated') {
     if (!isLoginPage) {
