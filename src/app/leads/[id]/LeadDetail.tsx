@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
@@ -27,8 +27,32 @@ type Lead = {
   tagline?: string | null
   hours?: string | null
   research_notes?: string | null
+  website_url?: string | null
   created_at: string
 }
+
+type UploadedFile = { url: string; path: string; name: string }
+
+type Extracted = Partial<{
+  business_name: string
+  phone: string
+  email: string
+  address: string
+  city: string
+  owner_name: string
+  tagline: string
+  services: string
+  hours: string
+  google_maps_url: string
+  facebook_url: string
+  instagram_url: string
+  yelp_url: string
+  website_url: string
+  primary_color: string
+  secondary_color: string
+  reviews: Review[]
+  research_notes: string
+}>
 
 const STATUS_LABELS: Record<string, string> = { new: 'New', called: 'Called', booked: 'Booked' }
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
@@ -37,59 +61,92 @@ const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
   booked: { bg: '#0d3320', color: '#00FFB2' },
 }
 
+const inputStyle = { backgroundColor: '#1a1a2e', border: '1px solid #3a3a5c', color: '#ffffff' }
+const labelStyle = { color: '#a0a0c0' }
+
 export default function LeadDetail({ lead }: { lead: Lead }) {
   const router = useRouter()
-  const [form, setForm] = useState({
-    business_name: lead.business_name || '',
-    phone: lead.phone || '',
-    city: lead.city || '',
-    niche: lead.niche || '',
-    status: lead.status || 'new',
-    owner_name: lead.owner_name || '',
-    email: lead.email || '',
-    address: lead.address || '',
-    facebook_url: lead.facebook_url || '',
-    instagram_url: lead.instagram_url || '',
-    google_maps_url: lead.google_maps_url || '',
-    yelp_url: lead.yelp_url || '',
-    services: lead.services || '',
-    primary_color: lead.primary_color || '#22c55e',
-    secondary_color: lead.secondary_color || '#166534',
-    tagline: lead.tagline || '',
-    hours: lead.hours || '',
-    research_notes: lead.research_notes || '',
-  })
-  const [reviews, setReviews] = useState<Review[]>(lead.reviews || [])
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [dragging, setDragging] = useState(false)
+
+  const [status, setStatus] = useState(lead.status || 'new')
+  const [dump, setDump] = useState('')
+  const [files, setFiles] = useState<UploadedFile[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [processing, setProcessing] = useState(false)
+  const [extracted, setExtracted] = useState<Extracted | null>(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
-  const inputStyle = { backgroundColor: '#1a1a2e', border: '1px solid #3a3a5c', color: '#ffffff' }
-  const labelStyle = { color: '#a0a0c0' }
-  const sc = STATUS_COLORS[form.status] || { bg: '#252540', color: '#a0a0c0' }
+  const sc = STATUS_COLORS[status] || { bg: '#252540', color: '#a0a0c0' }
 
-  function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
-    const { name, value } = e.target
-    setForm((f) => ({ ...f, [name]: value }))
+  async function uploadFiles(fileList: FileList) {
+    setUploading(true)
+    const uploaded: UploadedFile[] = []
+    for (const file of Array.from(fileList)) {
+      const fd = new FormData()
+      fd.append('leadId', lead.id)
+      fd.append('file', file)
+      const res = await fetch('/api/leads/upload', { method: 'POST', body: fd })
+      if (res.ok) {
+        const data = await res.json()
+        uploaded.push(data)
+      }
+    }
+    setFiles((prev) => [...prev, ...uploaded])
+    setUploading(false)
   }
 
-  function addReview() {
-    setReviews((r) => [...r, { name: '', rating: 5, text: '' }])
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragging(false)
+    if (e.dataTransfer.files.length) await uploadFiles(e.dataTransfer.files)
+  }, [lead.id])
+
+  async function removeFile(f: UploadedFile) {
+    await fetch('/api/leads/upload', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: f.path }),
+    })
+    setFiles((prev) => prev.filter((x) => x.path !== f.path))
   }
 
-  function updateReview(i: number, field: keyof Review, value: string | number) {
-    setReviews((r) => r.map((rev, idx) => idx === i ? { ...rev, [field]: value } : rev))
+  async function processWithAI() {
+    setProcessing(true)
+    setExtracted(null)
+    const res = await fetch('/api/leads/process', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dump,
+        imageUrls: files.map((f) => f.url),
+        businessName: lead.business_name,
+      }),
+    })
+    const data = await res.json()
+    setProcessing(false)
+    if (data.extracted) setExtracted(data.extracted)
+    else alert(data.error || 'AI processing failed')
   }
 
-  function removeReview(i: number) {
-    setReviews((r) => r.filter((_, idx) => idx !== i))
-  }
-
-  async function handleSave() {
+  async function saveExtracted() {
+    if (!extracted) return
     setSaving(true)
+    const payload: Record<string, unknown> = { status }
+    const fields: (keyof Extracted)[] = [
+      'business_name','phone','email','address','city','owner_name',
+      'tagline','services','hours','google_maps_url','facebook_url',
+      'instagram_url','yelp_url','website_url','primary_color','secondary_color',
+      'reviews','research_notes',
+    ]
+    for (const f of fields) {
+      if (extracted[f] !== null && extracted[f] !== undefined) payload[f] = extracted[f]
+    }
     await fetch(`/api/leads/${lead.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, reviews }),
+      body: JSON.stringify(payload),
     })
     setSaving(false)
     setSaved(true)
@@ -102,21 +159,22 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
     router.push('/leads')
   }
 
-  function LinkField({ label, name, value, placeholder }: { label: string; name: string; value: string; placeholder?: string }) {
+  function Field({ label, value, onChange, multiline, rows }: {
+    label: string; value: string; onChange: (v: string) => void
+    multiline?: boolean; rows?: number
+  }) {
+    if (multiline) return (
+      <div>
+        <label className="block text-xs mb-1" style={labelStyle}>{label}</label>
+        <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={rows || 2}
+          className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-y" style={inputStyle} />
+      </div>
+    )
     return (
       <div>
-        <label className="block text-sm mb-1" style={labelStyle}>{label}</label>
-        <div className="flex gap-2">
-          <input name={name} value={value} onChange={handleChange} placeholder={placeholder || 'https://'}
-            className="w-full px-4 py-2 rounded-lg text-sm outline-none" style={inputStyle} />
-          {value && (
-            <a href={value} target="_blank" rel="noopener noreferrer"
-              className="px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap flex-shrink-0"
-              style={{ backgroundColor: '#3a3a5c', color: '#00FFB2' }}>
-              Open ↗
-            </a>
-          )}
-        </div>
+        <label className="block text-xs mb-1" style={labelStyle}>{label}</label>
+        <input value={value} onChange={(e) => onChange(e.target.value)}
+          className="w-full px-3 py-2 rounded-lg text-sm outline-none" style={inputStyle} />
       </div>
     )
   }
@@ -129,34 +187,26 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
         <div className="flex items-center gap-3 flex-1">
           <h1 className="text-2xl font-bold" style={{ color: '#ffffff' }}>{lead.business_name}</h1>
           <span className="px-2 py-1 rounded-full text-xs font-semibold" style={{ backgroundColor: sc.bg, color: sc.color }}>
-            {STATUS_LABELS[form.status] || form.status}
+            {STATUS_LABELS[status] || status}
           </span>
         </div>
-        <div className="flex gap-2">
-          <button onClick={handleSave} disabled={saving}
-            className="px-5 py-2 rounded-lg font-medium text-sm disabled:opacity-50"
-            style={{ backgroundColor: '#00FFB2', color: '#1a1a2e' }}>
-            {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save'}
-          </button>
-          <button onClick={handleDelete}
-            className="px-4 py-2 rounded-lg text-sm"
-            style={{ backgroundColor: '#3D1B1B', color: '#FF6666' }}>
-            Delete
-          </button>
-        </div>
+        <button onClick={handleDelete} className="px-4 py-2 rounded-lg text-sm"
+          style={{ backgroundColor: '#3D1B1B', color: '#FF6666' }}>
+          Delete
+        </button>
       </div>
 
       <div className="space-y-6">
 
-        {/* Status + Pipeline */}
+        {/* Pipeline Status */}
         <div className="rounded-xl p-6 space-y-4" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
           <h2 className="font-semibold" style={{ color: '#ffffff' }}>Pipeline Status</h2>
           <div className="flex gap-3">
             {['new', 'called', 'booked'].map((s) => {
               const c = STATUS_COLORS[s]
-              const isActive = form.status === s
+              const isActive = status === s
               return (
-                <button key={s} onClick={() => setForm((f) => ({ ...f, status: s }))}
+                <button key={s} onClick={() => setStatus(s)}
                   className="flex-1 py-3 rounded-xl text-sm font-semibold transition-all"
                   style={{
                     backgroundColor: isActive ? c.bg : '#1a1a2e',
@@ -168,150 +218,180 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
               )
             })}
           </div>
-          {form.status === 'booked' && (
-            <div className="mt-2 p-3 rounded-lg text-sm" style={{ backgroundColor: '#0d3320', color: '#00FFB2', border: '1px solid #00FFB2' }}>
-              🎉 Meeting booked! Fill in the research below, then generate their website.
-            </div>
-          )}
         </div>
 
-        {/* Basic Info */}
+        {/* Research Dump */}
         <div className="rounded-xl p-6 space-y-4" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
-          <h2 className="font-semibold" style={{ color: '#ffffff' }}>Business Info</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {[
-              { label: 'Business Name', name: 'business_name' },
-              { label: 'Owner Name', name: 'owner_name' },
-              { label: 'Phone', name: 'phone' },
-              { label: 'Email', name: 'email' },
-              { label: 'City', name: 'city' },
-              { label: 'Niche', name: 'niche' },
-              { label: 'Address', name: 'address' },
-            ].map(({ label, name }) => (
-              <div key={name} className={name === 'address' ? 'sm:col-span-2' : ''}>
-                <label className="block text-sm mb-1" style={labelStyle}>{label}</label>
-                <input name={name} value={(form as any)[name]} onChange={handleChange}
-                  className="w-full px-4 py-2 rounded-lg text-sm outline-none" style={inputStyle} />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Online Presence */}
-        <div className="rounded-xl p-6 space-y-4" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
-          <h2 className="font-semibold" style={{ color: '#ffffff' }}>Online Presence</h2>
-          <div className="space-y-3">
-            <LinkField label="Google Maps / Google Business" name="google_maps_url" value={form.google_maps_url} />
-            <LinkField label="Facebook" name="facebook_url" value={form.facebook_url} />
-            <LinkField label="Instagram" name="instagram_url" value={form.instagram_url} />
-            <LinkField label="Yelp" name="yelp_url" value={form.yelp_url} />
-          </div>
-        </div>
-
-        {/* Services */}
-        <div className="rounded-xl p-6 space-y-4" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
-          <h2 className="font-semibold" style={{ color: '#ffffff' }}>Services & Hours</h2>
           <div>
-            <label className="block text-sm mb-1" style={labelStyle}>Services Offered</label>
-            <textarea name="services" value={form.services} onChange={handleChange} rows={4}
-              className="w-full px-4 py-3 rounded-lg text-sm outline-none resize-y" style={inputStyle}
-              placeholder="List their services, one per line or comma-separated…" />
+            <h2 className="font-semibold" style={{ color: '#ffffff' }}>Research Dump</h2>
+            <p className="text-sm mt-1" style={{ color: '#a0a0c0' }}>
+              Paste anything — their website URL, Google Maps link, Instagram, copy-pasted reviews, phone number, services, hours, notes. Dump it all in here.
+            </p>
           </div>
-          <div>
-            <label className="block text-sm mb-1" style={labelStyle}>Business Hours</label>
-            <textarea name="hours" value={form.hours} onChange={handleChange} rows={3}
-              className="w-full px-4 py-3 rounded-lg text-sm outline-none resize-y" style={inputStyle}
-              placeholder="Mon–Fri: 8am–6pm&#10;Sat: 9am–4pm&#10;Sun: Closed" />
-          </div>
-          <div>
-            <label className="block text-sm mb-1" style={labelStyle}>Tagline / Slogan</label>
-            <input name="tagline" value={form.tagline} onChange={handleChange}
-              className="w-full px-4 py-2 rounded-lg text-sm outline-none" style={inputStyle}
-              placeholder="e.g. Austin's Most Trusted Plumber" />
-          </div>
-        </div>
 
-        {/* Reviews */}
-        <div className="rounded-xl p-6 space-y-4" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold" style={{ color: '#ffffff' }}>Customer Reviews</h2>
-            <button onClick={addReview}
-              className="text-sm px-3 py-1 rounded-lg font-medium"
-              style={{ backgroundColor: '#1a1a2e', color: '#00FFB2', border: '1px solid #3a3a5c' }}>
-              + Add Review
-            </button>
+          <textarea
+            value={dump}
+            onChange={(e) => setDump(e.target.value)}
+            rows={10}
+            placeholder={`Paste everything you found. Examples:\n\nhttps://facebook.com/austinplumbing\nhttps://maps.google.com/...\n(512) 555-0123\nMon-Fri 7am-6pm, Sat 8am-2pm\nServices: leak repair, water heaters, drain cleaning\n"Best plumber in Austin!" - Sarah M.\n"Fixed our broken pipe same day" - John D. ⭐⭐⭐⭐⭐\nIn business since 2008, family owned`}
+            className="w-full px-4 py-3 rounded-lg text-sm outline-none resize-y font-mono"
+            style={{ ...inputStyle, lineHeight: '1.6' }}
+          />
+
+          {/* File Drop Zone */}
+          <div
+            onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+            className="rounded-xl cursor-pointer transition-colors flex flex-col items-center justify-center gap-2 p-8"
+            style={{
+              border: `2px dashed ${dragging ? '#00FFB2' : '#3a3a5c'}`,
+              backgroundColor: dragging ? '#0d1a14' : '#1a1a2e',
+            }}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => e.target.files && uploadFiles(e.target.files)}
+            />
+            <span className="text-2xl">📁</span>
+            <p className="text-sm font-medium" style={{ color: '#a0a0c0' }}>
+              {uploading ? 'Uploading…' : 'Drop images here or click to browse'}
+            </p>
+            <p className="text-xs" style={{ color: '#6060a0' }}>Logos, photos, screenshots, truck wraps — anything visual</p>
           </div>
-          {reviews.length === 0 && (
-            <p className="text-sm" style={{ color: '#6060a0' }}>No reviews yet. Add some from their Google or Yelp page.</p>
-          )}
-          {reviews.map((rev, i) => (
-            <div key={i} className="p-4 rounded-xl space-y-3" style={{ backgroundColor: '#1a1a2e', border: '1px solid #3a3a5c' }}>
-              <div className="flex gap-3 items-start">
-                <div className="flex-1 grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs mb-1" style={labelStyle}>Reviewer Name</label>
-                    <input value={rev.name} onChange={(e) => updateReview(i, 'name', e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg text-sm outline-none" style={inputStyle}
-                      placeholder="John D." />
-                  </div>
-                  <div>
-                    <label className="block text-xs mb-1" style={labelStyle}>Rating</label>
-                    <select value={rev.rating} onChange={(e) => updateReview(i, 'rating', parseInt(e.target.value))}
-                      className="w-full px-3 py-2 rounded-lg text-sm outline-none" style={inputStyle}>
-                      {[5, 4, 3, 2, 1].map((r) => <option key={r} value={r}>{'⭐'.repeat(r)} ({r})</option>)}
-                    </select>
+
+          {/* Uploaded files grid */}
+          {files.length > 0 && (
+            <div className="grid grid-cols-4 gap-3">
+              {files.map((f) => (
+                <div key={f.path} className="relative group rounded-xl overflow-hidden" style={{ aspectRatio: '1', backgroundColor: '#1a1a2e' }}>
+                  <img src={f.url} alt={f.name} className="w-full h-full object-cover" />
+                  <button
+                    onClick={() => removeFile(f)}
+                    className="absolute top-1 right-1 w-6 h-6 rounded-full text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                    style={{ backgroundColor: '#ef4444', color: '#ffffff' }}
+                  >
+                    ✕
+                  </button>
+                  <div className="absolute bottom-0 left-0 right-0 px-2 py-1 text-xs truncate"
+                    style={{ backgroundColor: 'rgba(0,0,0,0.7)', color: '#a0a0c0' }}>
+                    {f.name}
                   </div>
                 </div>
-                <button onClick={() => removeReview(i)} className="mt-5 text-sm px-2 py-1 rounded" style={{ color: '#ef4444' }}>✕</button>
+              ))}
+            </div>
+          )}
+
+          {/* Process button */}
+          <button
+            onClick={processWithAI}
+            disabled={processing || (!dump.trim() && files.length === 0)}
+            className="w-full py-3 rounded-xl font-semibold text-sm disabled:opacity-40 transition-colors"
+            style={{ backgroundColor: '#7c3aed', color: '#ffffff' }}
+          >
+            {processing ? '✨ Claude is reading everything…' : '✨ Process with AI'}
+          </button>
+        </div>
+
+        {/* Extracted Data Preview */}
+        {extracted && (
+          <div className="rounded-xl p-6 space-y-4" style={{ backgroundColor: '#0d1a0d', border: '2px solid #00FFB2' }}>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold" style={{ color: '#00FFB2' }}>AI Extracted — Review & Save</h2>
+                <p className="text-xs mt-1" style={{ color: '#a0a0c0' }}>Edit anything before saving to the lead record.</p>
+              </div>
+              <button
+                onClick={saveExtracted}
+                disabled={saving}
+                className="px-6 py-2 rounded-lg font-semibold text-sm disabled:opacity-50"
+                style={{ backgroundColor: '#00FFB2', color: '#0d1a0d' }}
+              >
+                {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save to Lead'}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Business Name" value={extracted.business_name || ''} onChange={(v) => setExtracted((e) => ({ ...e, business_name: v }))} />
+              <Field label="Owner Name" value={extracted.owner_name || ''} onChange={(v) => setExtracted((e) => ({ ...e, owner_name: v }))} />
+              <Field label="Phone" value={extracted.phone || ''} onChange={(v) => setExtracted((e) => ({ ...e, phone: v }))} />
+              <Field label="Email" value={extracted.email || ''} onChange={(v) => setExtracted((e) => ({ ...e, email: v }))} />
+              <Field label="City" value={extracted.city || ''} onChange={(v) => setExtracted((e) => ({ ...e, city: v }))} />
+              <Field label="Tagline" value={extracted.tagline || ''} onChange={(v) => setExtracted((e) => ({ ...e, tagline: v }))} />
+              <div className="sm:col-span-2">
+                <Field label="Address" value={extracted.address || ''} onChange={(v) => setExtracted((e) => ({ ...e, address: v }))} />
+              </div>
+              <div className="sm:col-span-2">
+                <Field label="Services" value={extracted.services || ''} onChange={(v) => setExtracted((e) => ({ ...e, services: v }))} multiline rows={2} />
+              </div>
+              <div className="sm:col-span-2">
+                <Field label="Hours" value={extracted.hours || ''} onChange={(v) => setExtracted((e) => ({ ...e, hours: v }))} multiline rows={3} />
+              </div>
+              <Field label="Google Maps URL" value={extracted.google_maps_url || ''} onChange={(v) => setExtracted((e) => ({ ...e, google_maps_url: v }))} />
+              <Field label="Facebook URL" value={extracted.facebook_url || ''} onChange={(v) => setExtracted((e) => ({ ...e, facebook_url: v }))} />
+              <Field label="Instagram URL" value={extracted.instagram_url || ''} onChange={(v) => setExtracted((e) => ({ ...e, instagram_url: v }))} />
+              <Field label="Yelp URL" value={extracted.yelp_url || ''} onChange={(v) => setExtracted((e) => ({ ...e, yelp_url: v }))} />
+              <Field label="Existing Website" value={extracted.website_url || ''} onChange={(v) => setExtracted((e) => ({ ...e, website_url: v }))} />
+            </div>
+
+            {/* Colors */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs mb-2" style={labelStyle}>Primary Color</label>
+                <div className="flex gap-3 items-center">
+                  <input type="color" value={extracted.primary_color || '#22c55e'}
+                    onChange={(e) => setExtracted((x) => ({ ...x, primary_color: e.target.value }))}
+                    className="w-10 h-10 rounded cursor-pointer border-0 bg-transparent" />
+                  <input value={extracted.primary_color || ''} onChange={(e) => setExtracted((x) => ({ ...x, primary_color: e.target.value }))}
+                    className="flex-1 px-3 py-2 rounded-lg text-sm outline-none font-mono" style={inputStyle} />
+                </div>
               </div>
               <div>
-                <label className="block text-xs mb-1" style={labelStyle}>Review Text</label>
-                <textarea value={rev.text} onChange={(e) => updateReview(i, 'text', e.target.value)} rows={2}
-                  className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-y" style={inputStyle}
-                  placeholder="Paste the review here…" />
+                <label className="block text-xs mb-2" style={labelStyle}>Secondary Color</label>
+                <div className="flex gap-3 items-center">
+                  <input type="color" value={extracted.secondary_color || '#166534'}
+                    onChange={(e) => setExtracted((x) => ({ ...x, secondary_color: e.target.value }))}
+                    className="w-10 h-10 rounded cursor-pointer border-0 bg-transparent" />
+                  <input value={extracted.secondary_color || ''} onChange={(e) => setExtracted((x) => ({ ...x, secondary_color: e.target.value }))}
+                    className="flex-1 px-3 py-2 rounded-lg text-sm outline-none font-mono" style={inputStyle} />
+                </div>
               </div>
             </div>
-          ))}
-        </div>
+            {(extracted.primary_color || extracted.secondary_color) && (
+              <div className="rounded-lg p-4 flex items-center gap-4"
+                style={{ backgroundColor: extracted.primary_color || '#22c55e' }}>
+                <div className="w-8 h-8 rounded-full" style={{ backgroundColor: extracted.secondary_color || '#166534' }} />
+                <span className="font-bold text-white text-sm">{extracted.business_name || lead.business_name}</span>
+              </div>
+            )}
 
-        {/* Branding */}
-        <div className="rounded-xl p-6 space-y-4" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
-          <h2 className="font-semibold" style={{ color: '#ffffff' }}>Website Branding</h2>
-          <p className="text-sm" style={{ color: '#a0a0c0' }}>Pick colors for their website. Check their Facebook or truck wrap for brand colors.</p>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm mb-2" style={labelStyle}>Primary Color</label>
-              <div className="flex gap-3 items-center">
-                <input type="color" name="primary_color" value={form.primary_color} onChange={handleChange}
-                  className="w-12 h-10 rounded cursor-pointer border-0 bg-transparent" />
-                <input name="primary_color" value={form.primary_color} onChange={handleChange}
-                  className="flex-1 px-3 py-2 rounded-lg text-sm outline-none font-mono" style={inputStyle} />
+            {/* Reviews */}
+            {extracted.reviews && extracted.reviews.length > 0 && (
+              <div>
+                <label className="block text-xs mb-2" style={labelStyle}>Reviews ({extracted.reviews.length} found)</label>
+                <div className="space-y-2">
+                  {extracted.reviews.map((rev, i) => (
+                    <div key={i} className="p-3 rounded-lg text-sm" style={{ backgroundColor: '#1a1a2e', border: '1px solid #3a3a5c' }}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span style={{ color: '#fbbf24' }}>{'⭐'.repeat(rev.rating)}</span>
+                        <span className="font-medium" style={{ color: '#ffffff' }}>{rev.name}</span>
+                      </div>
+                      <p style={{ color: '#a0a0c0' }}>{rev.text}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-            <div>
-              <label className="block text-sm mb-2" style={labelStyle}>Secondary Color</label>
-              <div className="flex gap-3 items-center">
-                <input type="color" name="secondary_color" value={form.secondary_color} onChange={handleChange}
-                  className="w-12 h-10 rounded cursor-pointer border-0 bg-transparent" />
-                <input name="secondary_color" value={form.secondary_color} onChange={handleChange}
-                  className="flex-1 px-3 py-2 rounded-lg text-sm outline-none font-mono" style={inputStyle} />
-              </div>
-            </div>
-          </div>
-          {/* Color preview */}
-          <div className="rounded-lg p-4 flex items-center gap-4" style={{ backgroundColor: form.primary_color }}>
-            <div className="w-8 h-8 rounded-full" style={{ backgroundColor: form.secondary_color }} />
-            <span className="font-bold text-white text-sm">{form.business_name || 'Business Name'}</span>
-          </div>
-        </div>
+            )}
 
-        {/* Research Notes */}
-        <div className="rounded-xl p-6 space-y-4" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
-          <h2 className="font-semibold" style={{ color: '#ffffff' }}>Research Notes</h2>
-          <textarea name="research_notes" value={form.research_notes} onChange={handleChange} rows={5}
-            className="w-full px-4 py-3 rounded-lg text-sm outline-none resize-y" style={inputStyle}
-            placeholder="Anything else you found — awards, years in business, certifications, area they serve, anything Claude should know when writing the website copy…" />
-        </div>
+            {/* Research Notes */}
+            <Field label="Research Notes" value={extracted.research_notes || ''} onChange={(v) => setExtracted((e) => ({ ...e, research_notes: v }))} multiline rows={4} />
+          </div>
+        )}
 
         {/* Generate Website */}
         <div className="rounded-xl p-6" style={{ backgroundColor: '#1a0d2e', border: '2px solid #7c3aed' }}>
@@ -319,14 +399,12 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
             <div>
               <h2 className="font-semibold" style={{ color: '#ffffff' }}>Generate Website</h2>
               <p className="text-sm mt-1" style={{ color: '#a0a0c0' }}>
-                Save your research above, then click to let Claude build a custom website and deploy it to Vercel.
+                Process your research above and save it, then generate a custom site and deploy to Vercel.
               </p>
             </div>
-            <button
-              disabled
+            <button disabled
               className="px-6 py-3 rounded-xl font-semibold text-sm opacity-50 cursor-not-allowed"
-              style={{ backgroundColor: '#7c3aed', color: '#ffffff' }}
-            >
+              style={{ backgroundColor: '#7c3aed', color: '#ffffff' }}>
               🚀 Generate Site
             </button>
           </div>
