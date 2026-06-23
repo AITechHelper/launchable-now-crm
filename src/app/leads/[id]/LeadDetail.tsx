@@ -395,13 +395,27 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
           </div>
         )}
 
+        {/* Save Button */}
+        {extracted && (
+          <div className="flex justify-end">
+            <button
+              onClick={saveExtracted}
+              disabled={saving}
+              className="px-8 py-3 rounded-xl font-semibold text-sm disabled:opacity-50"
+              style={{ backgroundColor: '#00FFB2', color: '#0d1a0d' }}
+            >
+              {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save to Lead'}
+            </button>
+          </div>
+        )}
+
         {/* Generate Website */}
         <div className="rounded-xl p-6" style={{ backgroundColor: '#1a0d2e', border: '2px solid #7c3aed' }}>
           <div className="flex items-center justify-between">
             <div>
               <h2 className="font-semibold" style={{ color: '#ffffff' }}>Generate Website</h2>
               <p className="text-sm mt-1" style={{ color: '#a0a0c0' }}>
-                Process your research above and save it, then generate a custom site and deploy to Vercel.
+                Save your research above, then generate a custom site and deploy to Vercel.
               </p>
             </div>
             <button disabled
@@ -411,7 +425,7 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
             </button>
           </div>
           <p className="text-xs mt-3" style={{ color: '#6060a0' }}>
-            Coming soon — requires ANTHROPIC_API_KEY and GITHUB_TOKEN in your environment.
+            Coming soon — Phase 3.
           </p>
         </div>
 
