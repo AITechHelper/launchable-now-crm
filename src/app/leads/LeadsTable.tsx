@@ -133,7 +133,17 @@ export default function LeadsTable({ initialLeads }: { initialLeads: Lead[] }) {
                       {new Date(lead.created_at).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {lead.status !== 'new' && (
+                          <button
+                            onClick={() => updateStatus(lead.id, lead.status === 'booked' ? 'called' : 'new')}
+                            disabled={updating === lead.id}
+                            className="text-xs px-2 py-1 rounded-lg disabled:opacity-50"
+                            style={{ color: '#6060a0', border: '1px solid #3a3a5c' }}
+                          >
+                            ← Back
+                          </button>
+                        )}
                         {lead.status === 'new' && (
                           <button
                             onClick={() => updateStatus(lead.id, 'called')}

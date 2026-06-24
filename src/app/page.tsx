@@ -13,7 +13,14 @@ export default async function DashboardPage() {
     .select('*')
     .order('created_at', { ascending: false })
 
+  const { data: bookedLeads } = await supabase
+    .from('leads')
+    .select('*')
+    .eq('status', 'booked')
+    .order('created_at', { ascending: false })
+
   const allClients = clients || []
+  const allBookedLeads = bookedLeads || []
 
   const totalMRR = allClients
     .filter((c) => c.status === 'Active')
@@ -55,6 +62,50 @@ export default async function DashboardPage() {
             </div>
           ))}
         </div>
+
+        {/* Booked Leads */}
+        {allBookedLeads.length > 0 && (
+          <div className="rounded-xl overflow-hidden mb-6" style={{ backgroundColor: '#252540', border: '1px solid #00FFB2' }}>
+            <div className="px-6 py-4 border-b flex items-center justify-between" style={{ borderColor: '#00FFB2' }}>
+              <div>
+                <h2 className="font-semibold" style={{ color: '#00FFB2' }}>Booked Leads</h2>
+                <p className="text-xs mt-0.5" style={{ color: '#a0a0c0' }}>Meeting booked — ready to research & build their site</p>
+              </div>
+              <Link href="/leads?tab=booked" className="text-sm px-4 py-2 rounded-lg font-medium" style={{ backgroundColor: '#0d3320', color: '#00FFB2', border: '1px solid #00FFB2' }}>
+                View All Leads
+              </Link>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #3a3a5c' }}>
+                    {['Business', 'Phone', 'City', 'Niche', 'Added'].map((h) => (
+                      <th key={h} className="text-left px-6 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: '#a0a0c0' }}>{h}</th>
+                    ))}
+                    <th className="text-left px-6 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: '#a0a0c0' }}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allBookedLeads.map((lead: { id: string; business_name: string; phone?: string | null; city?: string | null; niche?: string | null; created_at: string }) => (
+                    <tr key={lead.id} style={{ borderBottom: '1px solid #3a3a5c' }}>
+                      <td className="px-6 py-4 font-medium" style={{ color: '#ffffff' }}>{lead.business_name}</td>
+                      <td className="px-6 py-4 text-sm font-mono" style={{ color: '#34d399' }}>{lead.phone || '—'}</td>
+                      <td className="px-6 py-4 text-sm" style={{ color: '#a0a0c0' }}>{lead.city || '—'}</td>
+                      <td className="px-6 py-4 text-sm" style={{ color: '#a0a0c0' }}>{lead.niche || '—'}</td>
+                      <td className="px-6 py-4 text-sm" style={{ color: '#a0a0c0' }}>{new Date(lead.created_at).toLocaleDateString()}</td>
+                      <td className="px-6 py-4">
+                        <Link href={`/leads/${lead.id}`} className="text-xs px-3 py-1 rounded-lg font-medium"
+                          style={{ backgroundColor: '#4c1d95', color: '#c4b5fd', border: '1px solid #7c3aed' }}>
+                          → Research
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
           <div className="px-6 py-4 border-b flex items-center justify-between" style={{ borderColor: '#3a3a5c' }}>
