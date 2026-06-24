@@ -35,6 +35,7 @@ type Lead = {
   client_notes?: string | null
   meeting_notes?: string | null
   meeting_done?: boolean | null
+  latest_update?: string | null
   created_at: string
 }
 
@@ -112,6 +113,7 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
     client_notes: lead.client_notes || '',
     meeting_notes: lead.meeting_notes || '',
     meeting_done: lead.meeting_done || false,
+    latest_update: lead.latest_update || '',
   })
 
   function set(key: string, value: string | boolean | Review[]) {
@@ -320,6 +322,22 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
             style={{ backgroundColor: '#2a1212', color: '#f87171', border: '1px solid #3d1b1b' }}>
             Delete
           </button>
+        </div>
+      </div>
+
+      {/* Latest Update — always visible at the top */}
+      <div className="rounded-xl px-4 py-3 flex items-start gap-3" style={{ backgroundColor: '#1e2a1e', border: '1px solid #2a4a2a' }}>
+        <span className="text-base mt-0.5 flex-shrink-0">📌</span>
+        <div className="flex-1 min-w-0">
+          <label className="block text-xs font-semibold mb-1 uppercase tracking-wider" style={{ color: '#00FFB2' }}>Latest Update</label>
+          <input
+            type="text"
+            value={profile.latest_update}
+            onChange={(e) => set('latest_update', e.target.value)}
+            placeholder="e.g. Spoke with Chase — following up Friday. Interested in $150/mo plan."
+            className="w-full bg-transparent text-sm outline-none"
+            style={{ color: '#ffffff', caretColor: '#00FFB2' }}
+          />
         </div>
       </div>
 
