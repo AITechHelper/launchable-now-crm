@@ -31,20 +31,16 @@ export default async function DashboardPage() {
     .reduce((sum: number, c: { one_time_fee_amount?: number | null }) => sum + (c.one_time_fee_amount || 0), 0)
 
   const totalRevenue = totalOneTimeFees + totalMRR
-
   const activeCount = allClients.filter((c: { status: string }) => c.status === 'Active').length
-  const pipelineCount = allClients.filter((c: { status: string }) => c.status === 'Prospect' || c.status === 'Demo Booked').length
   const closedCount = allClients.filter((c: { status: string }) => c.status === 'Closed' || c.status === 'Active').length
-
-  const recentClients = allClients.slice(0, 10)
 
   const fmt = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 0 })}`
 
   const stats = [
     { label: 'Total Revenue', value: fmt(totalRevenue), sub: `${fmt(totalOneTimeFees)} fees + ${fmt(totalMRR)} MRR`, color: '#00FFB2' },
     { label: 'Monthly MRR', value: fmt(totalMRR), sub: `from ${activeCount} active client${activeCount !== 1 ? 's' : ''}`, color: '#00FFB2' },
-    { label: 'Pipeline', value: pipelineCount.toString(), sub: 'Prospect + Demo Booked', color: '#9B5FFF' },
-    { label: 'Total Closed', value: closedCount.toString(), sub: 'Closed + Active', color: '#6699FF' },
+    { label: 'Booked Leads', value: allBookedLeads.length.toString(), sub: 'Ready to build', color: '#9B5FFF' },
+    { label: 'Total Clients', value: closedCount.toString(), sub: 'Closed + Active', color: '#6699FF' },
   ]
 
   return (
@@ -53,6 +49,7 @@ export default async function DashboardPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <h1 className="text-2xl font-bold mb-6" style={{ color: '#ffffff' }}>Dashboard</h1>
 
+        {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {stats.map((stat) => (
             <div key={stat.label} className="rounded-xl p-6" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
@@ -65,102 +62,88 @@ export default async function DashboardPage() {
 
         {/* Booked Leads */}
         {allBookedLeads.length > 0 && (
-          <div className="rounded-xl overflow-hidden mb-6" style={{ backgroundColor: '#252540', border: '1px solid #00FFB2' }}>
-            <div className="px-6 py-4 border-b flex items-center justify-between" style={{ borderColor: '#00FFB2' }}>
+          <div className="rounded-xl overflow-hidden mb-6" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
+            <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #3a3a5c' }}>
               <div>
-                <h2 className="font-semibold" style={{ color: '#00FFB2' }}>Booked Leads</h2>
-                <p className="text-xs mt-0.5" style={{ color: '#a0a0c0' }}>Meeting booked — ready to research & build their site</p>
+                <h2 className="font-semibold" style={{ color: '#ffffff' }}>Booked Leads</h2>
+                <p className="text-xs mt-0.5" style={{ color: '#6060a0' }}>Meeting confirmed — ready to build their site</p>
               </div>
-              <Link href="/leads?tab=booked" className="text-sm px-4 py-2 rounded-lg font-medium" style={{ backgroundColor: '#0d3320', color: '#00FFB2', border: '1px solid #00FFB2' }}>
-                View All Leads
+              <Link href="/leads" className="text-xs px-3 py-1.5 rounded-lg" style={{ color: '#a0a0c0', border: '1px solid #3a3a5c' }}>
+                All Leads →
               </Link>
             </div>
+            <div>
+              {allBookedLeads.map((lead: { id: string; business_name: string; phone?: string | null; city?: string | null; niche?: string | null }) => (
+                <div key={lead.id} className="px-6 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid #2a2a45' }}>
+                  <div className="flex items-center gap-6 min-w-0">
+                    <span className="font-medium truncate" style={{ color: '#ffffff' }}>{lead.business_name}</span>
+                    {lead.city && <span className="text-sm hidden sm:block" style={{ color: '#6060a0' }}>{lead.city}</span>}
+                    {lead.niche && <span className="text-sm hidden md:block" style={{ color: '#6060a0' }}>{lead.niche}</span>}
+                  </div>
+                  <div className="flex items-center gap-4 flex-shrink-0">
+                    {lead.phone && <span className="text-sm font-mono hidden sm:block" style={{ color: '#34d399' }}>{lead.phone}</span>}
+                    <Link
+                      href={`/leads/${lead.id}`}
+                      className="text-xs px-3 py-1.5 rounded-lg font-medium whitespace-nowrap"
+                      style={{ backgroundColor: '#4c1d95', color: '#c4b5fd', border: '1px solid #7c3aed' }}
+                    >
+                      → Research
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Clients */}
+        <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
+          <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #3a3a5c' }}>
+            <div>
+              <h2 className="font-semibold" style={{ color: '#ffffff' }}>Clients</h2>
+              <p className="text-xs mt-0.5" style={{ color: '#6060a0' }}>Active and closed accounts</p>
+            </div>
+            <Link href="/clients/new" className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ backgroundColor: '#00FFB2', color: '#0d1a0d' }}>
+              + Add Client
+            </Link>
+          </div>
+          {allClients.length === 0 ? (
+            <div className="px-6 py-12 text-center text-sm" style={{ color: '#a0a0c0' }}>
+              No clients yet. <Link href="/clients/new" style={{ color: '#00FFB2' }}>Add your first →</Link>
+            </div>
+          ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr style={{ borderBottom: '1px solid #3a3a5c' }}>
-                    {['Business', 'Phone', 'City', 'Niche', 'Added'].map((h) => (
-                      <th key={h} className="text-left px-6 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: '#a0a0c0' }}>{h}</th>
+                    {['Business', 'Owner', 'City', 'Status', 'MRR'].map((h) => (
+                      <th key={h} className="text-left px-6 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: '#6060a0' }}>{h}</th>
                     ))}
-                    <th className="text-left px-6 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: '#a0a0c0' }}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {allBookedLeads.map((lead: { id: string; business_name: string; phone?: string | null; city?: string | null; niche?: string | null; created_at: string }) => (
-                    <tr key={lead.id} style={{ borderBottom: '1px solid #3a3a5c' }}>
-                      <td className="px-6 py-4 font-medium" style={{ color: '#ffffff' }}>{lead.business_name}</td>
-                      <td className="px-6 py-4 text-sm font-mono" style={{ color: '#34d399' }}>{lead.phone || '—'}</td>
-                      <td className="px-6 py-4 text-sm" style={{ color: '#a0a0c0' }}>{lead.city || '—'}</td>
-                      <td className="px-6 py-4 text-sm" style={{ color: '#a0a0c0' }}>{lead.niche || '—'}</td>
-                      <td className="px-6 py-4 text-sm" style={{ color: '#a0a0c0' }}>{new Date(lead.created_at).toLocaleDateString()}</td>
-                      <td className="px-6 py-4">
-                        <Link href={`/leads/${lead.id}`} className="text-xs px-3 py-1 rounded-lg font-medium"
-                          style={{ backgroundColor: '#4c1d95', color: '#c4b5fd', border: '1px solid #7c3aed' }}>
-                          → Research
+                  {allClients.map((client: {
+                    id: string; business_name: string; owner_name?: string | null
+                    city?: string | null; status: string; monthly_recurring?: number | null
+                  }) => (
+                    <tr key={client.id} style={{ borderBottom: '1px solid #2a2a45' }}>
+                      <td className="px-6 py-3">
+                        <Link href={`/clients/${client.id}`} className="font-medium hover:underline" style={{ color: '#ffffff' }}>
+                          {client.business_name}
                         </Link>
+                      </td>
+                      <td className="px-6 py-3 text-sm" style={{ color: '#a0a0c0' }}>{client.owner_name || '—'}</td>
+                      <td className="px-6 py-3 text-sm" style={{ color: '#a0a0c0' }}>{client.city || '—'}</td>
+                      <td className="px-6 py-3"><StatusBadge status={client.status} /></td>
+                      <td className="px-6 py-3 text-sm" style={{ color: '#ffffff' }}>
+                        {client.monthly_recurring ? `$${client.monthly_recurring}/mo` : '—'}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          </div>
-        )}
-
-        <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
-          <div className="px-6 py-4 border-b flex items-center justify-between" style={{ borderColor: '#3a3a5c' }}>
-            <h2 className="font-semibold" style={{ color: '#ffffff' }}>Recent Clients</h2>
-            <Link href="/clients/new" className="text-sm px-4 py-2 rounded-lg font-medium" style={{ backgroundColor: '#00FFB2', color: '#1a1a2e' }}>
-              + Add Client
-            </Link>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr style={{ borderBottom: '1px solid #3a3a5c' }}>
-                  {['Business', 'Owner', 'City', 'Niche', 'Status', 'MRR'].map((h) => (
-                    <th key={h} className="text-left px-6 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: '#a0a0c0' }}>
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {recentClients.map((client: {
-                  id: string
-                  business_name: string
-                  owner_name?: string | null
-                  city?: string | null
-                  niche?: string | null
-                  status: string
-                  monthly_recurring?: number | null
-                  date_added: string
-                }) => (
-                  <tr key={client.id} style={{ borderBottom: '1px solid #3a3a5c' }}>
-                    <td className="px-6 py-4">
-                      <Link href={`/clients/${client.id}`} className="font-medium hover:underline" style={{ color: '#ffffff' }}>
-                        {client.business_name}
-                      </Link>
-                    </td>
-                    <td className="px-6 py-4 text-sm" style={{ color: '#a0a0c0' }}>{client.owner_name || '—'}</td>
-                    <td className="px-6 py-4 text-sm" style={{ color: '#a0a0c0' }}>{client.city || '—'}</td>
-                    <td className="px-6 py-4 text-sm" style={{ color: '#a0a0c0' }}>{client.niche || '—'}</td>
-                    <td className="px-6 py-4"><StatusBadge status={client.status} /></td>
-                    <td className="px-6 py-4 text-sm" style={{ color: '#ffffff' }}>
-                      {client.monthly_recurring ? `$${client.monthly_recurring}/mo` : '—'}
-                    </td>
-                  </tr>
-                ))}
-                {recentClients.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-sm" style={{ color: '#a0a0c0' }}>
-                      No clients yet. <Link href="/clients/new" style={{ color: '#00FFB2' }}>Add your first client</Link>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          )}
         </div>
       </div>
     </div>
