@@ -10,7 +10,7 @@ export default async function ClientsPage() {
   const { data: clients } = await supabase
     .from('leads')
     .select('*')
-    .in('status', ['active', 'closed'])
+    .in('status', ['booked', 'active', 'closed'])
     .order('created_at', { ascending: false })
 
   const allClients = clients || []
@@ -34,7 +34,7 @@ export default async function ClientsPage() {
         {/* Quick stats */}
         <div className="grid grid-cols-3 gap-4 mb-6">
           {[
-            { label: 'Active Clients', value: allClients.filter(c => c.status === 'active').length, color: '#a78bfa' },
+            { label: 'Active Clients', value: allClients.filter(c => c.status === 'active' || c.status === 'booked').length, color: '#a78bfa' },
             { label: 'Monthly MRR', value: `$${totalMRR.toLocaleString()}`, color: '#00FFB2' },
             { label: 'Fees Collected', value: `$${totalFees.toLocaleString()}`, color: '#60a5fa' },
           ].map((s) => (
@@ -72,8 +72,11 @@ export default async function ClientsPage() {
                     <td className="px-5 py-3 text-sm" style={{ color: '#a0a0c0' }}>{c.city || '—'}</td>
                     <td className="px-5 py-3">
                       <span className="px-2 py-0.5 rounded-full text-xs font-semibold"
-                        style={{ backgroundColor: c.status === 'active' ? '#1a0d2e' : '#2a1a1a', color: c.status === 'active' ? '#a78bfa' : '#f87171' }}>
-                        {c.status === 'active' ? 'Active' : 'Closed'}
+                        style={{
+                          backgroundColor: c.status === 'active' ? '#1a0d2e' : c.status === 'booked' ? '#0d3320' : '#2a1a1a',
+                          color: c.status === 'active' ? '#a78bfa' : c.status === 'booked' ? '#00FFB2' : '#f87171'
+                        }}>
+                        {c.status === 'active' ? 'Active' : c.status === 'booked' ? 'Booked' : 'Closed'}
                       </span>
                     </td>
                     <td className="px-5 py-3 text-sm font-medium" style={{ color: c.mrr ? '#00FFB2' : '#4a4a6a' }}>
