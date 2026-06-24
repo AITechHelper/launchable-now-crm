@@ -16,6 +16,7 @@ export default function Nav() {
     { href: '/', label: 'Dashboard' },
     { href: '/leads', label: 'Leads' },
     { href: '/clients', label: 'Clients' },
+    { href: '/notes', label: 'Notes' },
   ]
 
   return (
