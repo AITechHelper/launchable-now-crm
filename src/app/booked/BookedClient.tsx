@@ -14,12 +14,24 @@ type Lead = {
   created_at: string
   site_url?: string | null
   website_url?: string | null
+  meeting_done?: boolean | null
+  meeting_notes?: string | null
 }
 
 export default function BookedClient({ initialLeads }: { initialLeads: Lead[] }) {
   const [leads, setLeads] = useState(initialLeads)
   const [updating, setUpdating] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+
+  async function toggleMeetingDone(id: string, current: boolean) {
+    const next = !current
+    setLeads((prev) => prev.map((l) => l.id === id ? { ...l, meeting_done: next } : l))
+    await fetch(`/api/leads/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ meeting_done: next }),
+    })
+  }
 
   async function updateStatus(id: string, status: string) {
     setUpdating(id)
@@ -61,7 +73,7 @@ export default function BookedClient({ initialLeads }: { initialLeads: Lead[] })
           <table className="w-full">
             <thead>
               <tr style={{ borderBottom: '1px solid #3a3a5c' }}>
-                {['Business', 'Owner', 'Phone', 'City', 'Niche', 'Booked', 'Actions'].map((h) => (
+                {['Business', 'Owner', 'Phone', 'City', 'Meeting', 'Actions'].map((h) => (
                   <th key={h} className="text-left px-5 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: '#6060a0' }}>{h}</th>
                 ))}
               </tr>
@@ -77,8 +89,23 @@ export default function BookedClient({ initialLeads }: { initialLeads: Lead[] })
                   <td className="px-5 py-3 text-sm" style={{ color: '#a0a0c0' }}>{lead.owner_name || '—'}</td>
                   <td className="px-5 py-3 text-sm font-mono" style={{ color: '#34d399' }}>{lead.phone || '—'}</td>
                   <td className="px-5 py-3 text-sm" style={{ color: '#a0a0c0' }}>{lead.city || '—'}</td>
-                  <td className="px-5 py-3 text-sm" style={{ color: '#a0a0c0' }}>{lead.niche || '—'}</td>
-                  <td className="px-5 py-3 text-sm" style={{ color: '#a0a0c0' }}>{new Date(lead.created_at).toLocaleDateString()}</td>
+                  <td className="px-5 py-3">
+                    <button
+                      onClick={() => toggleMeetingDone(lead.id, !!lead.meeting_done)}
+                      className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors"
+                      style={{
+                        backgroundColor: lead.meeting_done ? '#0d3320' : '#1a1a2e',
+                        color: lead.meeting_done ? '#00FFB2' : '#6060a0',
+                        border: `1px solid ${lead.meeting_done ? '#00FFB2' : '#3a3a5c'}`,
+                      }}>
+                      {lead.meeting_done ? '✓ Done' : '○ Pending'}
+                    </button>
+                    {lead.meeting_notes && (
+                      <p className="text-xs mt-1.5 max-w-xs truncate" style={{ color: '#6060a0' }} title={lead.meeting_notes}>
+                        {lead.meeting_notes}
+                      </p>
+                    )}
+                  </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2 flex-wrap">
                       <Link href={`/leads/${lead.id}`}

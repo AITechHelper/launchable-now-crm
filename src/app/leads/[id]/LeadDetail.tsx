@@ -33,6 +33,8 @@ type Lead = {
   one_time_fee?: number | null
   fee_collected?: boolean | null
   client_notes?: string | null
+  meeting_notes?: string | null
+  meeting_done?: boolean | null
   created_at: string
 }
 
@@ -108,6 +110,8 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
     one_time_fee: String(lead.one_time_fee || 0),
     fee_collected: lead.fee_collected || false,
     client_notes: lead.client_notes || '',
+    meeting_notes: lead.meeting_notes || '',
+    meeting_done: lead.meeting_done || false,
   })
 
   function set(key: string, value: string | boolean | Review[]) {
@@ -290,6 +294,7 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
 
   const statusInfo = STATUSES.find((s) => s.key === status) || STATUSES[0]
   const isClient = status === 'active' || status === 'closed'
+  const isBooked = status === 'booked' || status === 'active' || status === 'closed'
 
   return (
     <div className="space-y-6">
@@ -434,6 +439,38 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
               <Field label="Client Notes" value={profile.client_notes} onChange={(v) => set('client_notes', v)} multiline rows={3} />
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Meeting Notes — visible from Booked onward */}
+      {isBooked && (
+        <div className="rounded-xl p-6 space-y-4" style={{ backgroundColor: '#252540', border: `1px solid ${profile.meeting_done ? '#00FFB2' : '#3a3a5c'}` }}>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-semibold" style={{ color: '#ffffff' }}>Meeting Notes</h2>
+              <p className="text-xs mt-1" style={{ color: '#6060a0' }}>Log what happened in your meeting — objections, interest level, follow-up plan.</p>
+            </div>
+            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              <div
+                onClick={() => set('meeting_done', !profile.meeting_done)}
+                className="relative w-10 h-6 rounded-full transition-colors flex-shrink-0"
+                style={{ backgroundColor: profile.meeting_done ? '#00FFB2' : '#3a3a5c' }}>
+                <div className="absolute top-1 w-4 h-4 rounded-full transition-transform"
+                  style={{ backgroundColor: '#ffffff', left: profile.meeting_done ? '22px' : '4px', transition: 'left 0.15s' }} />
+              </div>
+              <span className="text-sm font-medium" style={{ color: profile.meeting_done ? '#00FFB2' : '#6060a0' }}>
+                {profile.meeting_done ? 'Meeting done ✓' : 'Mark complete'}
+              </span>
+            </label>
+          </div>
+          <textarea
+            value={profile.meeting_notes}
+            onChange={(e) => set('meeting_notes', e.target.value)}
+            rows={5}
+            placeholder="e.g. Spoke with John — very interested, just needs to check with his partner. Follow up Friday. Budget around $150/mo."
+            className="w-full px-4 py-3 rounded-lg text-sm outline-none resize-y"
+            style={{ ...inputStyle, lineHeight: '1.6' }}
+          />
         </div>
       )}
 
