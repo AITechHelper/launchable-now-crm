@@ -394,6 +394,24 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
         </div>
       </div>
 
+      {/* Live Site Link — show whenever a site has been generated */}
+      {siteUrl && (
+        <div className="rounded-xl px-4 py-3 flex items-center justify-between gap-4" style={{ backgroundColor: '#0d1a0d', border: '1px solid #00FFB2' }}>
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="text-base flex-shrink-0">🌐</span>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-wider mb-0.5" style={{ color: '#00FFB2' }}>Live Site</p>
+              <p className="text-sm font-mono truncate" style={{ color: '#ffffff' }}>{siteUrl}</p>
+            </div>
+          </div>
+          <a href={siteUrl} target="_blank" rel="noopener noreferrer"
+            className="px-4 py-2 rounded-lg text-sm font-semibold flex-shrink-0"
+            style={{ backgroundColor: '#00FFB2', color: '#0d1a0d' }}>
+            View ↗
+          </a>
+        </div>
+      )}
+
       {/* Latest Update — always visible at the top */}
       <div className="rounded-xl px-4 py-3 flex items-start gap-3" style={{ backgroundColor: '#1e2a1e', border: '1px solid #2a4a2a' }}>
         <span className="text-base mt-0.5 flex-shrink-0">📌</span>
