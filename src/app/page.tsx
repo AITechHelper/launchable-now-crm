@@ -8,40 +8,30 @@ export const revalidate = 0
 export default async function DashboardPage() {
   const supabase = createServerClient()
 
-  const { data: clients } = await supabase
-    .from('clients')
-    .select('*')
-    .order('created_at', { ascending: false })
-
-  const { data: bookedLeads } = await supabase
+  const { data: allLeads } = await supabase
     .from('leads')
     .select('*')
-    .eq('status', 'booked')
     .order('created_at', { ascending: false })
 
-  const allClients = clients || []
-  const allBookedLeads = bookedLeads || []
+  const leads = allLeads || []
+  const bookedLeads = leads.filter((l) => l.status === 'booked')
+  const activeClients = leads.filter((l) => l.status === 'active')
 
-  const totalMRR = allClients
-    .filter((c) => c.status === 'Active')
-    .reduce((sum: number, c: { monthly_recurring?: number | null }) => sum + (c.monthly_recurring || 0), 0)
-
-  const totalOneTimeFees = allClients
-    .filter((c) => c.one_time_fee_collected)
-    .reduce((sum: number, c: { one_time_fee_amount?: number | null }) => sum + (c.one_time_fee_amount || 0), 0)
-
-  const totalRevenue = totalOneTimeFees + totalMRR
-  const activeCount = allClients.filter((c: { status: string }) => c.status === 'Active').length
-  const closedCount = allClients.filter((c: { status: string }) => c.status === 'Closed' || c.status === 'Active').length
+  const totalMRR = activeClients.reduce((sum, c) => sum + (c.mrr || 0), 0)
+  const totalFees = leads.filter((l) => l.fee_collected).reduce((sum, c) => sum + (c.one_time_fee || 0), 0)
+  const totalRevenue = totalMRR + totalFees
 
   const fmt = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 0 })}`
 
   const stats = [
-    { label: 'Total Revenue', value: fmt(totalRevenue), sub: `${fmt(totalOneTimeFees)} fees + ${fmt(totalMRR)} MRR`, color: '#00FFB2' },
-    { label: 'Monthly MRR', value: fmt(totalMRR), sub: `from ${activeCount} active client${activeCount !== 1 ? 's' : ''}`, color: '#00FFB2' },
-    { label: 'Booked Leads', value: allBookedLeads.length.toString(), sub: 'Ready to build', color: '#9B5FFF' },
-    { label: 'Total Clients', value: closedCount.toString(), sub: 'Closed + Active', color: '#6699FF' },
+    { label: 'Total Revenue', value: fmt(totalRevenue), sub: `${fmt(totalFees)} fees + ${fmt(totalMRR)} MRR`, color: '#00FFB2' },
+    { label: 'Monthly MRR', value: fmt(totalMRR), sub: `from ${activeClients.length} active client${activeClients.length !== 1 ? 's' : ''}`, color: '#00FFB2' },
+    { label: 'Booked Leads', value: bookedLeads.length.toString(), sub: 'Ready to build', color: '#9B5FFF' },
+    { label: 'Active Clients', value: activeClients.length.toString(), sub: 'Paying clients', color: '#6699FF' },
   ]
+
+  const allBookedLeads = bookedLeads
+  const allClients = activeClients
 
   return (
     <div style={{ backgroundColor: '#1a1a2e', minHeight: '100vh' }}>
@@ -122,21 +112,18 @@ export default async function DashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {allClients.map((client: {
-                    id: string; business_name: string; owner_name?: string | null
-                    city?: string | null; status: string; monthly_recurring?: number | null
-                  }) => (
+                  {allClients.map((client) => (
                     <tr key={client.id} style={{ borderBottom: '1px solid #2a2a45' }}>
                       <td className="px-6 py-3">
-                        <Link href={`/clients/${client.id}`} className="font-medium hover:underline" style={{ color: '#ffffff' }}>
+                        <Link href={`/leads/${client.id}`} className="font-medium hover:underline" style={{ color: '#ffffff' }}>
                           {client.business_name}
                         </Link>
                       </td>
                       <td className="px-6 py-3 text-sm" style={{ color: '#a0a0c0' }}>{client.owner_name || '—'}</td>
                       <td className="px-6 py-3 text-sm" style={{ color: '#a0a0c0' }}>{client.city || '—'}</td>
                       <td className="px-6 py-3"><StatusBadge status={client.status} /></td>
-                      <td className="px-6 py-3 text-sm" style={{ color: '#ffffff' }}>
-                        {client.monthly_recurring ? `$${client.monthly_recurring}/mo` : '—'}
+                      <td className="px-6 py-3 text-sm" style={{ color: '#00FFB2' }}>
+                        {client.mrr ? `$${client.mrr}/mo` : '—'}
                       </td>
                     </tr>
                   ))}

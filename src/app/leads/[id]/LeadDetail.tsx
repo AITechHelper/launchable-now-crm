@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback, useEffect, useTransition } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
@@ -28,82 +28,109 @@ type Lead = {
   hours?: string | null
   research_notes?: string | null
   website_url?: string | null
+  site_url?: string | null
+  mrr?: number | null
+  one_time_fee?: number | null
+  fee_collected?: boolean | null
+  client_notes?: string | null
   created_at: string
 }
 
 type UploadedFile = { url: string; path: string; name: string }
 
-type Extracted = Partial<{
-  business_name: string
-  phone: string
-  email: string
-  address: string
-  city: string
-  owner_name: string
-  tagline: string
-  services: string
-  hours: string
-  google_maps_url: string
-  facebook_url: string
-  instagram_url: string
-  yelp_url: string
-  website_url: string
-  primary_color: string
-  secondary_color: string
-  reviews: Review[]
-  research_notes: string
-}>
-
-const STATUS_LABELS: Record<string, string> = { new: 'New', called: 'Called', booked: 'Booked' }
-const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
-  new:    { bg: '#1e3a5f', color: '#60a5fa' },
-  called: { bg: '#3a2e00', color: '#fbbf24' },
-  booked: { bg: '#0d3320', color: '#00FFB2' },
-}
+const STATUSES = [
+  { key: 'new',    label: 'New',    bg: '#1e3a5f', color: '#60a5fa' },
+  { key: 'called', label: 'Called', bg: '#3a2e00', color: '#fbbf24' },
+  { key: 'booked', label: 'Booked', bg: '#0d3320', color: '#00FFB2' },
+  { key: 'active', label: 'Active', bg: '#1a0d2e', color: '#a78bfa' },
+  { key: 'closed', label: 'Closed', bg: '#2a1a1a', color: '#f87171' },
+]
 
 const inputStyle = { backgroundColor: '#1a1a2e', border: '1px solid #3a3a5c', color: '#ffffff' }
-const labelStyle = { color: '#a0a0c0' }
+const labelStyle = { color: '#6060a0' }
+
+function Field({ label, value, onChange, multiline, rows, type, mono }: {
+  label: string; value: string; onChange: (v: string) => void
+  multiline?: boolean; rows?: number; type?: string; mono?: boolean
+}) {
+  const cls = `w-full px-3 py-2 rounded-lg text-sm outline-none${mono ? ' font-mono' : ''}`
+  return (
+    <div>
+      <label className="block text-xs mb-1" style={labelStyle}>{label}</label>
+      {multiline
+        ? <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={rows || 2}
+            className={`${cls} resize-y`} style={inputStyle} />
+        : <input type={type || 'text'} value={value} onChange={(e) => onChange(e.target.value)}
+            className={cls} style={inputStyle} />
+      }
+    </div>
+  )
+}
 
 export default function LeadDetail({ lead }: { lead: Lead }) {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [dragging, setDragging] = useState(false)
-
-  const [status, setStatus] = useState(lead.status || 'new')
-  const [dump, setDump] = useState(lead.research_notes || '')
   const [files, setFiles] = useState<UploadedFile[]>([])
   const [uploading, setUploading] = useState(false)
   const [processing, setProcessing] = useState(false)
-  const [extracted, setExtracted] = useState<Extracted | null>(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [dumpSaving, setDumpSaving] = useState(false)
-  const [dumpSaved, setDumpSaved] = useState(false)
-  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [, startTransition] = useTransition()
   const [generating, setGenerating] = useState(false)
   const [genLogs, setGenLogs] = useState<string[]>([])
-  const [siteUrl, setSiteUrl] = useState<string | null>(null)
+  const [siteUrl, setSiteUrl] = useState<string | null>(lead.site_url || null)
   const genLogRef = useRef<HTMLDivElement>(null)
 
-  const sc = STATUS_COLORS[status] || { bg: '#252540', color: '#a0a0c0' }
+  // Single profile state — always pre-filled from lead
+  const [status, setStatus] = useState(lead.status || 'new')
+  const [profile, setProfile] = useState({
+    business_name: lead.business_name || '',
+    phone: lead.phone || '',
+    email: lead.email || '',
+    owner_name: lead.owner_name || '',
+    city: lead.city || '',
+    address: lead.address || '',
+    niche: lead.niche || '',
+    tagline: lead.tagline || '',
+    services: lead.services || '',
+    hours: lead.hours || '',
+    google_maps_url: lead.google_maps_url || '',
+    facebook_url: lead.facebook_url || '',
+    instagram_url: lead.instagram_url || '',
+    yelp_url: lead.yelp_url || '',
+    website_url: lead.website_url || '',
+    primary_color: lead.primary_color || '#22c55e',
+    secondary_color: lead.secondary_color || '#166534',
+    research_notes: lead.research_notes || '',
+    reviews: lead.reviews || [] as Review[],
+    mrr: String(lead.mrr || 0),
+    one_time_fee: String(lead.one_time_fee || 0),
+    fee_collected: lead.fee_collected || false,
+    client_notes: lead.client_notes || '',
+  })
+
+  function set(key: string, value: string | boolean | Review[]) {
+    setProfile((p) => ({ ...p, [key]: value }))
+  }
 
   useEffect(() => {
     if (genLogRef.current) genLogRef.current.scrollTop = genLogRef.current.scrollHeight
   }, [genLogs])
 
-  async function saveDump() {
-    setDumpSaving(true)
-    await fetch(`/api/leads/${lead.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ research_notes: dump }),
-    })
-    setDumpSaving(false)
-    setDumpSaved(true)
-    setTimeout(() => setDumpSaved(false), 2000)
-    router.refresh()
-  }
+  // Auto-save research notes 2s after typing stops
+  useEffect(() => {
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+    autoSaveTimer.current = setTimeout(() => {
+      fetch(`/api/leads/${lead.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ research_notes: profile.research_notes }),
+      })
+    }, 2000)
+    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile.research_notes])
 
   async function updateStatus(newStatus: string) {
     setStatus(newStatus)
@@ -115,35 +142,22 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
     router.refresh()
   }
 
-  async function generateSite() {
-    setGenerating(true)
-    setGenLogs([])
-    setSiteUrl(null)
-
-    const resp = await fetch(`/api/leads/${lead.id}/generate`, { method: 'POST' })
-    if (!resp.body) { setGenerating(false); return }
-
-    const reader = resp.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue
-        try {
-          const payload = JSON.parse(line.slice(6))
-          if (payload.log) setGenLogs((prev) => [...prev, payload.log])
-          if (payload.done) setSiteUrl(payload.siteUrl)
-          if (payload.error) setGenLogs((prev) => [...prev, `❌ ERROR: ${payload.error}`])
-        } catch { /* ignore */ }
-      }
-    }
-    setGenerating(false)
+  async function saveProfile() {
+    setSaving(true)
+    await fetch(`/api/leads/${lead.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...profile,
+        mrr: parseFloat(profile.mrr) || 0,
+        one_time_fee: parseFloat(profile.one_time_fee) || 0,
+        status,
+      }),
+    })
+    setSaving(false)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2500)
+    router.refresh()
   }
 
   async function uploadFiles(fileList: FileList) {
@@ -155,11 +169,8 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
       fd.append('file', file)
       const res = await fetch('/api/leads/upload', { method: 'POST', body: fd })
       const data = await res.json()
-      if (res.ok) {
-        uploaded.push(data)
-      } else {
-        alert(`Upload failed: ${data.error || 'Unknown error'}`)
-      }
+      if (res.ok) uploaded.push(data)
+      else alert(`Upload failed: ${data.error || 'Unknown error'}`)
     }
     setFiles((prev) => [...prev, ...uploaded])
     setUploading(false)
@@ -169,6 +180,7 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
     e.preventDefault()
     setDragging(false)
     if (e.dataTransfer.files.length) await uploadFiles(e.dataTransfer.files)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead.id])
 
   async function removeFile(f: UploadedFile) {
@@ -181,51 +193,81 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
   }
 
   async function processWithAI() {
-    // Always save the dump first so nothing is lost
+    // Save research first so nothing is lost
     await fetch(`/api/leads/${lead.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ research_notes: dump }),
+      body: JSON.stringify({ research_notes: profile.research_notes }),
     })
     setProcessing(true)
-    setExtracted(null)
     const res = await fetch('/api/leads/process', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        dump,
+        dump: profile.research_notes,
         imageUrls: files.map((f) => f.url),
-        businessName: lead.business_name,
+        businessName: profile.business_name,
       }),
     })
     const data = await res.json()
     setProcessing(false)
-    if (data.extracted) setExtracted(data.extracted)
-    else alert(`AI processing failed: ${data.error || 'Unknown error'}${data.raw ? '\n\nRaw: ' + data.raw.slice(0, 300) : ''}`)
+    if (data.extracted) {
+      const e = data.extracted
+      setProfile((p) => ({
+        ...p,
+        business_name: e.business_name || p.business_name,
+        phone: e.phone || p.phone,
+        email: e.email || p.email,
+        owner_name: e.owner_name || p.owner_name,
+        city: e.city || p.city,
+        address: e.address || p.address,
+        tagline: e.tagline || p.tagline,
+        services: e.services || p.services,
+        hours: e.hours || p.hours,
+        google_maps_url: e.google_maps_url || p.google_maps_url,
+        facebook_url: e.facebook_url || p.facebook_url,
+        instagram_url: e.instagram_url || p.instagram_url,
+        yelp_url: e.yelp_url || p.yelp_url,
+        website_url: e.website_url || p.website_url,
+        primary_color: e.primary_color || p.primary_color,
+        secondary_color: e.secondary_color || p.secondary_color,
+        research_notes: e.research_notes || p.research_notes,
+        reviews: e.reviews?.length ? e.reviews : p.reviews,
+      }))
+    } else {
+      alert(`AI processing failed: ${data.error || 'Unknown error'}`)
+    }
   }
 
-  async function saveExtracted() {
-    if (!extracted) return
-    setSaving(true)
-    const payload: Record<string, unknown> = { status }
-    const fields: (keyof Extracted)[] = [
-      'business_name','phone','email','address','city','owner_name',
-      'tagline','services','hours','google_maps_url','facebook_url',
-      'instagram_url','yelp_url','website_url','primary_color','secondary_color',
-      'reviews','research_notes',
-    ]
-    for (const f of fields) {
-      if (extracted[f] !== null && extracted[f] !== undefined) payload[f] = extracted[f]
+  async function generateSite() {
+    await saveProfile()
+    setGenerating(true)
+    setGenLogs([])
+    const resp = await fetch(`/api/leads/${lead.id}/generate`, { method: 'POST' })
+    if (!resp.body) { setGenerating(false); return }
+    const reader = resp.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        try {
+          const payload = JSON.parse(line.slice(6))
+          if (payload.log) setGenLogs((prev) => [...prev, payload.log])
+          if (payload.done) {
+            setSiteUrl(payload.siteUrl)
+            set('website_url', payload.siteUrl)
+          }
+          if (payload.error) setGenLogs((prev) => [...prev, `❌ ${payload.error}`])
+        } catch { /* ignore */ }
+      }
     }
-    await fetch(`/api/leads/${lead.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-    router.refresh()
+    setGenerating(false)
   }
 
   async function handleDelete() {
@@ -234,334 +276,255 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
     router.push('/leads')
   }
 
-  function Field({ label, value, onChange, multiline, rows }: {
-    label: string; value: string; onChange: (v: string) => void
-    multiline?: boolean; rows?: number
-  }) {
-    if (multiline) return (
-      <div>
-        <label className="block text-xs mb-1" style={labelStyle}>{label}</label>
-        <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={rows || 2}
-          className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-y" style={inputStyle} />
-      </div>
-    )
-    return (
-      <div>
-        <label className="block text-xs mb-1" style={labelStyle}>{label}</label>
-        <input value={value} onChange={(e) => onChange(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg text-sm outline-none" style={inputStyle} />
-      </div>
-    )
-  }
+  const statusInfo = STATUSES.find((s) => s.key === status) || STATUSES[0]
+  const isClient = status === 'active' || status === 'closed'
 
   return (
-    <div>
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4 mb-6">
-        <Link href="/leads" className="text-sm" style={{ color: '#a0a0c0' }}>← Leads</Link>
-        <div className="flex items-center gap-3 flex-1">
-          <h1 className="text-2xl font-bold" style={{ color: '#ffffff' }}>{lead.business_name}</h1>
-          <span className="px-2 py-1 rounded-full text-xs font-semibold" style={{ backgroundColor: sc.bg, color: sc.color }}>
-            {STATUS_LABELS[status] || status}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <Link href="/leads" className="text-xs mb-2 inline-block" style={{ color: '#6060a0' }}>← Back to Leads</Link>
+          <h1 className="text-2xl font-bold" style={{ color: '#ffffff' }}>{profile.business_name || 'New Lead'}</h1>
+          <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-semibold"
+            style={{ backgroundColor: statusInfo.bg, color: statusInfo.color }}>
+            {statusInfo.label}
           </span>
         </div>
-        <button onClick={handleDelete} className="px-4 py-2 rounded-lg text-sm"
-          style={{ backgroundColor: '#3D1B1B', color: '#FF6666' }}>
-          Delete
-        </button>
+        <div className="flex items-center gap-3 flex-shrink-0 pt-5">
+          {saved && <span className="text-sm font-medium" style={{ color: '#00FFB2' }}>Saved ✓</span>}
+          <button onClick={saveProfile} disabled={saving}
+            className="px-5 py-2 rounded-lg font-semibold text-sm disabled:opacity-50"
+            style={{ backgroundColor: '#00FFB2', color: '#0d1a0d' }}>
+            {saving ? 'Saving…' : 'Save Profile'}
+          </button>
+          <button onClick={handleDelete} className="px-4 py-2 rounded-lg text-sm"
+            style={{ backgroundColor: '#2a1212', color: '#f87171', border: '1px solid #3d1b1b' }}>
+            Delete
+          </button>
+        </div>
       </div>
 
-      <div className="space-y-6">
+      {/* Pipeline Status */}
+      <div className="rounded-xl p-4" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
+        <p className="text-xs font-medium mb-3 uppercase tracking-wider" style={{ color: '#6060a0' }}>Pipeline Stage</p>
+        <div className="flex gap-2">
+          {STATUSES.map((s) => (
+            <button key={s.key} onClick={() => updateStatus(s.key)}
+              className="flex-1 py-2.5 rounded-lg text-xs font-semibold transition-all"
+              style={{
+                backgroundColor: status === s.key ? s.bg : '#1a1a2e',
+                color: status === s.key ? s.color : '#4a4a6a',
+                border: `2px solid ${status === s.key ? s.color : '#2a2a45'}`,
+              }}>
+              {s.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
-        {/* Pipeline Status */}
-        <div className="rounded-xl p-6 space-y-4" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
-          <h2 className="font-semibold" style={{ color: '#ffffff' }}>Pipeline Status</h2>
-          <div className="flex gap-3">
-            {['new', 'called', 'booked'].map((s) => {
-              const c = STATUS_COLORS[s]
-              const isActive = status === s
-              return (
-                <button key={s} onClick={() => updateStatus(s)}
-                  className="flex-1 py-3 rounded-xl text-sm font-semibold transition-all"
-                  style={{
-                    backgroundColor: isActive ? c.bg : '#1a1a2e',
-                    color: isActive ? c.color : '#6060a0',
-                    border: `2px solid ${isActive ? c.color : '#3a3a5c'}`,
-                  }}>
-                  {STATUS_LABELS[s]}
-                </button>
-              )
-            })}
+      {/* Profile Info */}
+      <div className="rounded-xl p-6 space-y-4" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
+        <h2 className="font-semibold text-sm uppercase tracking-wider" style={{ color: '#6060a0' }}>Business Info</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Field label="Business Name" value={profile.business_name} onChange={(v) => set('business_name', v)} />
+          <Field label="Owner Name" value={profile.owner_name} onChange={(v) => set('owner_name', v)} />
+          <Field label="Phone" value={profile.phone} onChange={(v) => set('phone', v)} />
+          <Field label="Email" value={profile.email} onChange={(v) => set('email', v)} />
+          <Field label="City" value={profile.city} onChange={(v) => set('city', v)} />
+          <Field label="Niche / Industry" value={profile.niche} onChange={(v) => set('niche', v)} />
+          <div className="sm:col-span-2">
+            <Field label="Address" value={profile.address} onChange={(v) => set('address', v)} />
+          </div>
+          <div className="sm:col-span-2">
+            <Field label="Tagline" value={profile.tagline} onChange={(v) => set('tagline', v)} />
+          </div>
+          <div className="sm:col-span-2">
+            <Field label="Services" value={profile.services} onChange={(v) => set('services', v)} multiline rows={2} />
+          </div>
+          <div className="sm:col-span-2">
+            <Field label="Hours" value={profile.hours} onChange={(v) => set('hours', v)} multiline rows={2} />
           </div>
         </div>
 
-        {/* Research Dump */}
-        <div className="rounded-xl p-6 space-y-4" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
+        <div className="pt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <h3 className="sm:col-span-2 text-xs font-medium uppercase tracking-wider" style={{ color: '#6060a0' }}>Links & Socials</h3>
+          <Field label="Google Maps URL" value={profile.google_maps_url} onChange={(v) => set('google_maps_url', v)} mono />
+          <Field label="Facebook URL" value={profile.facebook_url} onChange={(v) => set('facebook_url', v)} mono />
+          <Field label="Instagram URL" value={profile.instagram_url} onChange={(v) => set('instagram_url', v)} mono />
+          <Field label="Yelp URL" value={profile.yelp_url} onChange={(v) => set('yelp_url', v)} mono />
+          <div className="sm:col-span-2">
+            <Field label="Existing Website" value={profile.website_url} onChange={(v) => set('website_url', v)} mono />
+          </div>
+        </div>
+
+        <div className="pt-2 grid grid-cols-2 gap-4">
+          <h3 className="col-span-2 text-xs font-medium uppercase tracking-wider" style={{ color: '#6060a0' }}>Brand Colors</h3>
           <div>
-            <h2 className="font-semibold" style={{ color: '#ffffff' }}>Research Dump</h2>
-            <p className="text-sm mt-1" style={{ color: '#a0a0c0' }}>
-              Paste anything — their website URL, Google Maps link, Instagram, copy-pasted reviews, phone number, services, hours, notes. Dump it all in here.
-            </p>
-          </div>
-
-          <textarea
-            value={dump}
-            onChange={(e) => {
-              const val = e.target.value
-              setDump(val)
-              if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
-              autoSaveTimer.current = setTimeout(async () => {
-                await fetch(`/api/leads/${lead.id}`, {
-                  method: 'PATCH',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ research_notes: val }),
-                })
-                startTransition(() => { setDumpSaved(true) })
-                setTimeout(() => setDumpSaved(false), 2000)
-              }, 2000)
-            }}
-            rows={10}
-            placeholder={`Paste everything you found. Examples:\n\nhttps://facebook.com/austinplumbing\nhttps://maps.google.com/...\n(512) 555-0123\nMon-Fri 7am-6pm, Sat 8am-2pm\nServices: leak repair, water heaters, drain cleaning\n"Best plumber in Austin!" - Sarah M.\n"Fixed our broken pipe same day" - John D. ⭐⭐⭐⭐⭐\nIn business since 2008, family owned`}
-            className="w-full px-4 py-3 rounded-lg text-sm outline-none resize-y font-mono"
-            style={{ ...inputStyle, lineHeight: '1.6' }}
-          />
-
-          {/* File Drop Zone */}
-          <div
-            onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            className="rounded-xl cursor-pointer transition-colors flex flex-col items-center justify-center gap-2 p-8"
-            style={{
-              border: `2px dashed ${dragging ? '#00FFB2' : '#3a3a5c'}`,
-              backgroundColor: dragging ? '#0d1a14' : '#1a1a2e',
-            }}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => e.target.files && uploadFiles(e.target.files)}
-            />
-            <span className="text-2xl">📁</span>
-            <p className="text-sm font-medium" style={{ color: '#a0a0c0' }}>
-              {uploading ? 'Uploading…' : 'Drop images here or click to browse'}
-            </p>
-            <p className="text-xs" style={{ color: '#6060a0' }}>Logos, photos, screenshots, truck wraps — anything visual</p>
-          </div>
-
-          {/* Uploaded files grid */}
-          {files.length > 0 && (
-            <div className="grid grid-cols-4 gap-3">
-              {files.map((f) => (
-                <div key={f.path} className="relative group rounded-xl overflow-hidden" style={{ aspectRatio: '1', backgroundColor: '#1a1a2e' }}>
-                  <img src={f.url} alt={f.name} className="w-full h-full object-cover" />
-                  <button
-                    onClick={() => removeFile(f)}
-                    className="absolute top-1 right-1 w-6 h-6 rounded-full text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                    style={{ backgroundColor: '#ef4444', color: '#ffffff' }}
-                  >
-                    ✕
-                  </button>
-                  <div className="absolute bottom-0 left-0 right-0 px-2 py-1 text-xs truncate"
-                    style={{ backgroundColor: 'rgba(0,0,0,0.7)', color: '#a0a0c0' }}>
-                    {f.name}
-                  </div>
-                </div>
-              ))}
+            <label className="block text-xs mb-2" style={labelStyle}>Primary Color</label>
+            <div className="flex gap-3 items-center">
+              <input type="color" value={profile.primary_color}
+                onChange={(e) => set('primary_color', e.target.value)}
+                className="w-10 h-10 rounded cursor-pointer border-0 bg-transparent" />
+              <input value={profile.primary_color} onChange={(e) => set('primary_color', e.target.value)}
+                className="flex-1 px-3 py-2 rounded-lg text-sm outline-none font-mono" style={inputStyle} />
             </div>
-          )}
-
-          {/* Save + Process buttons */}
-          <div className="flex gap-3">
-            <button
-              onClick={saveDump}
-              disabled={dumpSaving}
-              className="px-6 py-3 rounded-xl font-semibold text-sm disabled:opacity-50 flex-shrink-0"
-              style={{ backgroundColor: '#1a1a2e', color: dumpSaved ? '#00FFB2' : '#a0a0c0', border: `1px solid ${dumpSaved ? '#00FFB2' : '#3a3a5c'}` }}
-            >
-              {dumpSaving ? 'Saving…' : dumpSaved ? 'Saved ✓' : 'Save Notes'}
-            </button>
-            <button
-              onClick={processWithAI}
-              disabled={processing || (!dump.trim() && files.length === 0)}
-              className="flex-1 py-3 rounded-xl font-semibold text-sm disabled:opacity-40 transition-colors"
-              style={{ backgroundColor: '#7c3aed', color: '#ffffff' }}
-            >
-              {processing ? '✨ Claude is reading everything…' : '✨ Process with AI'}
-            </button>
+          </div>
+          <div>
+            <label className="block text-xs mb-2" style={labelStyle}>Secondary Color</label>
+            <div className="flex gap-3 items-center">
+              <input type="color" value={profile.secondary_color}
+                onChange={(e) => set('secondary_color', e.target.value)}
+                className="w-10 h-10 rounded cursor-pointer border-0 bg-transparent" />
+              <input value={profile.secondary_color} onChange={(e) => set('secondary_color', e.target.value)}
+                className="flex-1 px-3 py-2 rounded-lg text-sm outline-none font-mono" style={inputStyle} />
+            </div>
           </div>
         </div>
+      </div>
 
-        {/* Extracted Data Preview */}
-        {extracted && (
-          <div className="rounded-xl p-6 space-y-4" style={{ backgroundColor: '#0d1a0d', border: '2px solid #00FFB2' }}>
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="font-semibold" style={{ color: '#00FFB2' }}>AI Extracted — Review & Save</h2>
-                <p className="text-xs mt-1" style={{ color: '#a0a0c0' }}>Edit anything before saving to the lead record.</p>
-              </div>
-              <button
-                onClick={saveExtracted}
-                disabled={saving}
-                className="px-6 py-2 rounded-lg font-semibold text-sm disabled:opacity-50"
-                style={{ backgroundColor: '#00FFB2', color: '#0d1a0d' }}
-              >
-                {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save to Lead'}
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="Business Name" value={extracted.business_name || ''} onChange={(v) => setExtracted((e) => ({ ...e, business_name: v }))} />
-              <Field label="Owner Name" value={extracted.owner_name || ''} onChange={(v) => setExtracted((e) => ({ ...e, owner_name: v }))} />
-              <Field label="Phone" value={extracted.phone || ''} onChange={(v) => setExtracted((e) => ({ ...e, phone: v }))} />
-              <Field label="Email" value={extracted.email || ''} onChange={(v) => setExtracted((e) => ({ ...e, email: v }))} />
-              <Field label="City" value={extracted.city || ''} onChange={(v) => setExtracted((e) => ({ ...e, city: v }))} />
-              <Field label="Tagline" value={extracted.tagline || ''} onChange={(v) => setExtracted((e) => ({ ...e, tagline: v }))} />
-              <div className="sm:col-span-2">
-                <Field label="Address" value={extracted.address || ''} onChange={(v) => setExtracted((e) => ({ ...e, address: v }))} />
-              </div>
-              <div className="sm:col-span-2">
-                <Field label="Services" value={extracted.services || ''} onChange={(v) => setExtracted((e) => ({ ...e, services: v }))} multiline rows={2} />
-              </div>
-              <div className="sm:col-span-2">
-                <Field label="Hours" value={extracted.hours || ''} onChange={(v) => setExtracted((e) => ({ ...e, hours: v }))} multiline rows={3} />
-              </div>
-              <Field label="Google Maps URL" value={extracted.google_maps_url || ''} onChange={(v) => setExtracted((e) => ({ ...e, google_maps_url: v }))} />
-              <Field label="Facebook URL" value={extracted.facebook_url || ''} onChange={(v) => setExtracted((e) => ({ ...e, facebook_url: v }))} />
-              <Field label="Instagram URL" value={extracted.instagram_url || ''} onChange={(v) => setExtracted((e) => ({ ...e, instagram_url: v }))} />
-              <Field label="Yelp URL" value={extracted.yelp_url || ''} onChange={(v) => setExtracted((e) => ({ ...e, yelp_url: v }))} />
-              <Field label="Existing Website" value={extracted.website_url || ''} onChange={(v) => setExtracted((e) => ({ ...e, website_url: v }))} />
-            </div>
-
-            {/* Colors */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs mb-2" style={labelStyle}>Primary Color</label>
-                <div className="flex gap-3 items-center">
-                  <input type="color" value={extracted.primary_color || '#22c55e'}
-                    onChange={(e) => setExtracted((x) => ({ ...x, primary_color: e.target.value }))}
-                    className="w-10 h-10 rounded cursor-pointer border-0 bg-transparent" />
-                  <input value={extracted.primary_color || ''} onChange={(e) => setExtracted((x) => ({ ...x, primary_color: e.target.value }))}
-                    className="flex-1 px-3 py-2 rounded-lg text-sm outline-none font-mono" style={inputStyle} />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs mb-2" style={labelStyle}>Secondary Color</label>
-                <div className="flex gap-3 items-center">
-                  <input type="color" value={extracted.secondary_color || '#166534'}
-                    onChange={(e) => setExtracted((x) => ({ ...x, secondary_color: e.target.value }))}
-                    className="w-10 h-10 rounded cursor-pointer border-0 bg-transparent" />
-                  <input value={extracted.secondary_color || ''} onChange={(e) => setExtracted((x) => ({ ...x, secondary_color: e.target.value }))}
-                    className="flex-1 px-3 py-2 rounded-lg text-sm outline-none font-mono" style={inputStyle} />
-                </div>
-              </div>
-            </div>
-            {(extracted.primary_color || extracted.secondary_color) && (
-              <div className="rounded-lg p-4 flex items-center gap-4"
-                style={{ backgroundColor: extracted.primary_color || '#22c55e' }}>
-                <div className="w-8 h-8 rounded-full" style={{ backgroundColor: extracted.secondary_color || '#166534' }} />
-                <span className="font-bold text-white text-sm">{extracted.business_name || lead.business_name}</span>
-              </div>
-            )}
-
-            {/* Reviews */}
-            {extracted.reviews && extracted.reviews.length > 0 && (
-              <div>
-                <label className="block text-xs mb-2" style={labelStyle}>Reviews ({extracted.reviews.length} found)</label>
-                <div className="space-y-2">
-                  {extracted.reviews.map((rev, i) => (
-                    <div key={i} className="p-3 rounded-lg text-sm" style={{ backgroundColor: '#1a1a2e', border: '1px solid #3a3a5c' }}>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span style={{ color: '#fbbf24' }}>{'⭐'.repeat(rev.rating)}</span>
-                        <span className="font-medium" style={{ color: '#ffffff' }}>{rev.name}</span>
-                      </div>
-                      <p style={{ color: '#a0a0c0' }}>{rev.text}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Research Notes */}
-            <Field label="Research Notes" value={extracted.research_notes || ''} onChange={(v) => setExtracted((e) => ({ ...e, research_notes: v }))} multiline rows={4} />
-          </div>
-        )}
-
-        {/* Save Button */}
-        {extracted && (
-          <div className="flex justify-end">
-            <button
-              onClick={saveExtracted}
-              disabled={saving}
-              className="px-8 py-3 rounded-xl font-semibold text-sm disabled:opacity-50"
-              style={{ backgroundColor: '#00FFB2', color: '#0d1a0d' }}
-            >
-              {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save to Lead'}
-            </button>
-          </div>
-        )}
-
-        {/* Generate Website */}
-        <div className="rounded-xl p-6 space-y-4" style={{ backgroundColor: '#1a0d2e', border: '2px solid #7c3aed' }}>
-          <div className="flex items-center justify-between">
+      {/* Client Billing — only when Active or Closed */}
+      {isClient && (
+        <div className="rounded-xl p-6 space-y-4" style={{ backgroundColor: '#252540', border: '1px solid #a78bfa' }}>
+          <h2 className="font-semibold text-sm uppercase tracking-wider" style={{ color: '#a78bfa' }}>Client Billing</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <h2 className="font-semibold" style={{ color: '#ffffff' }}>Generate Website</h2>
-              <p className="text-sm mt-1" style={{ color: '#a0a0c0' }}>
-                Claude reads the saved research and builds a custom site, then pushes it to GitHub Pages.
-              </p>
+              <label className="block text-xs mb-1" style={labelStyle}>Monthly Recurring ($)</label>
+              <input type="number" value={profile.mrr} onChange={(e) => set('mrr', e.target.value)}
+                className="w-full px-3 py-2 rounded-lg text-sm outline-none" style={inputStyle} />
             </div>
-            <button
-              onClick={generateSite}
-              disabled={generating}
-              className="px-6 py-3 rounded-xl font-semibold text-sm disabled:opacity-60 transition-colors"
-              style={{ backgroundColor: '#7c3aed', color: '#ffffff' }}
-            >
-              {generating ? '⚙️ Generating…' : '🚀 Generate Site'}
-            </button>
-          </div>
-
-          {/* Generation log */}
-          {genLogs.length > 0 && (
-            <div
-              ref={genLogRef}
-              className="p-4 rounded-lg font-mono text-xs overflow-y-auto"
-              style={{ backgroundColor: '#0f0812', color: '#94a3b8', maxHeight: '220px', border: '1px solid #4c1d95' }}
-            >
-              {genLogs.map((l, i) => (
-                <div key={i} style={{
-                  color: l.startsWith('✅') || l.includes('✓') ? '#00FFB2'
-                    : l.startsWith('❌') ? '#ef4444'
-                    : l.startsWith('   ') ? '#c4b5fd'
-                    : '#94a3b8'
-                }}>
-                  {l}
+            <div>
+              <label className="block text-xs mb-1" style={labelStyle}>One-Time Fee ($)</label>
+              <input type="number" value={profile.one_time_fee} onChange={(e) => set('one_time_fee', e.target.value)}
+                className="w-full px-3 py-2 rounded-lg text-sm outline-none" style={inputStyle} />
+            </div>
+            <div className="flex items-center gap-3 pt-1">
+              <input type="checkbox" id="fee_collected" checked={profile.fee_collected}
+                onChange={(e) => set('fee_collected', e.target.checked)}
+                className="w-4 h-4 rounded" />
+              <label htmlFor="fee_collected" className="text-sm cursor-pointer" style={{ color: '#a0a0c0' }}>
+                One-time fee collected
+              </label>
+            </div>
+            {siteUrl && (
+              <div className="sm:col-span-2">
+                <label className="block text-xs mb-1" style={labelStyle}>Live Site URL</label>
+                <div className="flex gap-2 items-center">
+                  <input value={siteUrl} readOnly className="flex-1 px-3 py-2 rounded-lg text-sm font-mono outline-none" style={inputStyle} />
+                  <a href={siteUrl} target="_blank" rel="noopener noreferrer"
+                    className="px-3 py-2 rounded-lg text-sm font-medium flex-shrink-0"
+                    style={{ backgroundColor: '#00FFB2', color: '#0d1a0d' }}>↗</a>
                 </div>
-              ))}
-              {generating && <div style={{ color: '#a78bfa' }}>▋</div>}
-            </div>
-          )}
-
-          {/* Site URL result */}
-          {siteUrl && (
-            <div className="p-4 rounded-xl flex items-center justify-between" style={{ backgroundColor: '#0d1a0d', border: '1px solid #00FFB2' }}>
-              <div>
-                <p className="text-xs font-semibold mb-1" style={{ color: '#00FFB2' }}>Site is live!</p>
-                <p className="text-sm font-mono" style={{ color: '#ffffff' }}>{siteUrl}</p>
-                <p className="text-xs mt-1" style={{ color: '#6060a0' }}>May take ~1 min for GitHub Pages to go live</p>
               </div>
-              <a href={siteUrl} target="_blank" rel="noopener noreferrer"
-                className="px-4 py-2 rounded-lg text-sm font-semibold ml-4 flex-shrink-0"
-                style={{ backgroundColor: '#00FFB2', color: '#0d1a0d' }}>
-                View Site ↗
-              </a>
+            )}
+            <div className="sm:col-span-2">
+              <Field label="Client Notes" value={profile.client_notes} onChange={(v) => set('client_notes', v)} multiline rows={3} />
             </div>
-          )}
+          </div>
+        </div>
+      )}
+
+      {/* Research Dump */}
+      <div className="rounded-xl p-6 space-y-4" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
+        <div>
+          <h2 className="font-semibold" style={{ color: '#ffffff' }}>Research</h2>
+          <p className="text-xs mt-1" style={{ color: '#6060a0' }}>Paste anything — links, copy-pasted reviews, notes, hours. AI will extract the fields above.</p>
+        </div>
+        <textarea
+          value={profile.research_notes}
+          onChange={(e) => set('research_notes', e.target.value)}
+          rows={8}
+          placeholder="Paste everything you found — Google Maps link, Facebook, reviews, phone, hours, services…"
+          className="w-full px-4 py-3 rounded-lg text-sm outline-none resize-y font-mono"
+          style={{ ...inputStyle, lineHeight: '1.6' }}
+        />
+
+        {/* File Drop Zone */}
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={handleDrop}
+          onClick={() => fileInputRef.current?.click()}
+          className="rounded-xl cursor-pointer flex flex-col items-center justify-center gap-2 p-6"
+          style={{ border: `2px dashed ${dragging ? '#00FFB2' : '#3a3a5c'}`, backgroundColor: dragging ? '#0d1a14' : '#1a1a2e' }}
+        >
+          <input ref={fileInputRef} type="file" multiple accept="image/*" className="hidden"
+            onChange={(e) => e.target.files && uploadFiles(e.target.files)} />
+          <span className="text-xl">📁</span>
+          <p className="text-sm" style={{ color: '#a0a0c0' }}>{uploading ? 'Uploading…' : 'Drop logos & photos here or click to browse'}</p>
         </div>
 
+        {files.length > 0 && (
+          <div className="grid grid-cols-5 gap-2">
+            {files.map((f) => (
+              <div key={f.path} className="relative group rounded-lg overflow-hidden" style={{ aspectRatio: '1', backgroundColor: '#1a1a2e' }}>
+                <img src={f.url} alt={f.name} className="w-full h-full object-cover" />
+                <button onClick={() => removeFile(f)}
+                  className="absolute top-1 right-1 w-5 h-5 rounded-full text-xs font-bold opacity-0 group-hover:opacity-100 flex items-center justify-center"
+                  style={{ backgroundColor: '#ef4444', color: '#fff' }}>✕</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <button onClick={processWithAI} disabled={processing || !profile.research_notes.trim()}
+            className="flex-1 py-3 rounded-xl font-semibold text-sm disabled:opacity-40"
+            style={{ backgroundColor: '#7c3aed', color: '#ffffff' }}>
+            {processing ? '✨ Reading everything…' : '✨ Process with AI'}
+          </button>
+        </div>
+      </div>
+
+      {/* Reviews */}
+      {profile.reviews.length > 0 && (
+        <div className="rounded-xl p-6 space-y-3" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
+          <h2 className="font-semibold text-sm uppercase tracking-wider" style={{ color: '#6060a0' }}>Reviews ({profile.reviews.length})</h2>
+          {profile.reviews.map((rev, i) => (
+            <div key={i} className="p-3 rounded-lg text-sm" style={{ backgroundColor: '#1a1a2e', border: '1px solid #3a3a5c' }}>
+              <div className="flex items-center gap-2 mb-1">
+                <span style={{ color: '#fbbf24' }}>{'⭐'.repeat(rev.rating)}</span>
+                <span className="font-medium" style={{ color: '#ffffff' }}>{rev.name}</span>
+              </div>
+              <p style={{ color: '#a0a0c0' }}>{rev.text}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Generate Website */}
+      <div className="rounded-xl p-6 space-y-4" style={{ backgroundColor: '#1a0d2e', border: '2px solid #7c3aed' }}>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold" style={{ color: '#ffffff' }}>Generate Website</h2>
+            <p className="text-xs mt-1" style={{ color: '#a0a0c0' }}>Saves profile first, then Claude builds and deploys a custom site.</p>
+          </div>
+          <button onClick={generateSite} disabled={generating}
+            className="px-6 py-3 rounded-xl font-semibold text-sm disabled:opacity-60"
+            style={{ backgroundColor: '#7c3aed', color: '#ffffff' }}>
+            {generating ? '⚙️ Generating…' : '🚀 Generate Site'}
+          </button>
+        </div>
+        {genLogs.length > 0 && (
+          <div ref={genLogRef} className="p-4 rounded-lg font-mono text-xs overflow-y-auto"
+            style={{ backgroundColor: '#0f0812', color: '#94a3b8', maxHeight: '200px', border: '1px solid #4c1d95' }}>
+            {genLogs.map((l, i) => (
+              <div key={i} style={{ color: l.startsWith('✅') || l.includes('✓') ? '#00FFB2' : l.startsWith('❌') ? '#ef4444' : l.startsWith('   ') ? '#c4b5fd' : '#94a3b8' }}>{l}</div>
+            ))}
+            {generating && <div style={{ color: '#a78bfa' }}>▋</div>}
+          </div>
+        )}
+        {siteUrl && (
+          <div className="p-4 rounded-xl flex items-center justify-between" style={{ backgroundColor: '#0d1a0d', border: '1px solid #00FFB2' }}>
+            <div>
+              <p className="text-xs font-semibold mb-1" style={{ color: '#00FFB2' }}>Site is live!</p>
+              <p className="text-sm font-mono" style={{ color: '#ffffff' }}>{siteUrl}</p>
+            </div>
+            <a href={siteUrl} target="_blank" rel="noopener noreferrer"
+              className="px-4 py-2 rounded-lg text-sm font-semibold ml-4 flex-shrink-0"
+              style={{ backgroundColor: '#00FFB2', color: '#0d1a0d' }}>View Site ↗</a>
+          </div>
+        )}
       </div>
     </div>
   )
