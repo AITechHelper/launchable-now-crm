@@ -210,6 +210,70 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
     setFiles((prev) => prev.filter((x) => x.path !== f.path))
   }
 
+  const [autofilling, setAutofilling] = useState(false)
+
+  async function autofillFromProfile() {
+    setAutofilling(true)
+    // Build a text summary of all current profile data for Claude to work from
+    const dump = [
+      `Business Name: ${profile.business_name}`,
+      `Owner: ${profile.owner_name}`,
+      `Phone: ${profile.phone}`,
+      `Email: ${profile.email}`,
+      `City: ${profile.city}`,
+      `Address: ${profile.address}`,
+      `Niche: ${profile.niche}`,
+      `Tagline: ${profile.tagline}`,
+      `Services: ${profile.services}`,
+      `Hours: ${profile.hours}`,
+      `Google Maps: ${profile.google_maps_url}`,
+      `Facebook: ${profile.facebook_url}`,
+      `Instagram: ${profile.instagram_url}`,
+      `Yelp: ${profile.yelp_url}`,
+      `Website: ${profile.website_url}`,
+      `Research Notes: ${profile.research_notes}`,
+    ].filter((line) => !line.endsWith(': ')).join('\n')
+
+    const res = await fetch('/api/leads/process', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dump,
+        imageUrls: files.map((f) => f.url),
+        businessName: profile.business_name,
+      }),
+    })
+    const data = await res.json()
+    setAutofilling(false)
+    if (data.extracted) {
+      const e = data.extracted
+      setProfile((p) => ({
+        ...p,
+        business_name: e.business_name || p.business_name,
+        phone: e.phone || p.phone,
+        email: e.email || p.email,
+        owner_name: e.owner_name || p.owner_name,
+        city: e.city || p.city,
+        address: e.address || p.address,
+        tagline: e.tagline || p.tagline,
+        services: e.services || p.services,
+        hours: e.hours || p.hours,
+        google_maps_url: e.google_maps_url || p.google_maps_url,
+        facebook_url: e.facebook_url || p.facebook_url,
+        instagram_url: e.instagram_url || p.instagram_url,
+        yelp_url: e.yelp_url || p.yelp_url,
+        website_url: e.website_url || p.website_url,
+        primary_color: e.primary_color || p.primary_color,
+        secondary_color: e.secondary_color || p.secondary_color,
+        research_notes: e.research_notes || p.research_notes,
+        reviews: e.reviews?.length ? e.reviews : p.reviews,
+      }))
+      setDirty(true)
+    } else {
+      alert(`AI autofill failed: ${data.error || 'Unknown error'}`)
+    }
+  }
+
   async function processWithAI() {
     // Save research first so nothing is lost
     await fetch(`/api/leads/${lead.id}`, {
@@ -313,6 +377,11 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
         <div className="flex items-center gap-3 flex-shrink-0 pt-5">
           {dirty && !saved && <span className="text-xs" style={{ color: '#6060a0' }}>Saving…</span>}
           {saved && <span className="text-sm font-medium" style={{ color: '#00FFB2' }}>Saved ✓</span>}
+          <button onClick={autofillFromProfile} disabled={autofilling}
+            className="px-4 py-2 rounded-lg font-medium text-sm disabled:opacity-50 flex items-center gap-1.5"
+            style={{ backgroundColor: '#2d1a4a', color: '#c4b5fd', border: '1px solid #7c3aed' }}>
+            {autofilling ? '✨ Filling…' : '✨ AI Autofill'}
+          </button>
           <button onClick={saveProfile} disabled={saving}
             className="px-5 py-2 rounded-lg font-semibold text-sm disabled:opacity-50"
             style={{ backgroundColor: '#00FFB2', color: '#0d1a0d' }}>
