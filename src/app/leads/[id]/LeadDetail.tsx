@@ -70,13 +70,15 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
   const [dragging, setDragging] = useState(false)
 
   const [status, setStatus] = useState(lead.status || 'new')
-  const [dump, setDump] = useState('')
+  const [dump, setDump] = useState(lead.research_notes || '')
   const [files, setFiles] = useState<UploadedFile[]>([])
   const [uploading, setUploading] = useState(false)
   const [processing, setProcessing] = useState(false)
   const [extracted, setExtracted] = useState<Extracted | null>(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [dumpSaving, setDumpSaving] = useState(false)
+  const [dumpSaved, setDumpSaved] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [genLogs, setGenLogs] = useState<string[]>([])
   const [siteUrl, setSiteUrl] = useState<string | null>(null)
@@ -87,6 +89,29 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
   useEffect(() => {
     if (genLogRef.current) genLogRef.current.scrollTop = genLogRef.current.scrollHeight
   }, [genLogs])
+
+  async function saveDump() {
+    setDumpSaving(true)
+    await fetch(`/api/leads/${lead.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ research_notes: dump }),
+    })
+    setDumpSaving(false)
+    setDumpSaved(true)
+    setTimeout(() => setDumpSaved(false), 2000)
+    router.refresh()
+  }
+
+  async function updateStatus(newStatus: string) {
+    setStatus(newStatus)
+    await fetch(`/api/leads/${lead.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus }),
+    })
+    router.refresh()
+  }
 
   async function generateSite() {
     setGenerating(true)
@@ -192,6 +217,7 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
+    router.refresh()
   }
 
   async function handleDelete() {
@@ -247,7 +273,7 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
               const c = STATUS_COLORS[s]
               const isActive = status === s
               return (
-                <button key={s} onClick={() => setStatus(s)}
+                <button key={s} onClick={() => updateStatus(s)}
                   className="flex-1 py-3 rounded-xl text-sm font-semibold transition-all"
                   style={{
                     backgroundColor: isActive ? c.bg : '#1a1a2e',
@@ -328,15 +354,25 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
             </div>
           )}
 
-          {/* Process button */}
-          <button
-            onClick={processWithAI}
-            disabled={processing || (!dump.trim() && files.length === 0)}
-            className="w-full py-3 rounded-xl font-semibold text-sm disabled:opacity-40 transition-colors"
-            style={{ backgroundColor: '#7c3aed', color: '#ffffff' }}
-          >
-            {processing ? '✨ Claude is reading everything…' : '✨ Process with AI'}
-          </button>
+          {/* Save + Process buttons */}
+          <div className="flex gap-3">
+            <button
+              onClick={saveDump}
+              disabled={dumpSaving}
+              className="px-6 py-3 rounded-xl font-semibold text-sm disabled:opacity-50 flex-shrink-0"
+              style={{ backgroundColor: '#1a1a2e', color: dumpSaved ? '#00FFB2' : '#a0a0c0', border: `1px solid ${dumpSaved ? '#00FFB2' : '#3a3a5c'}` }}
+            >
+              {dumpSaving ? 'Saving…' : dumpSaved ? 'Saved ✓' : 'Save Notes'}
+            </button>
+            <button
+              onClick={processWithAI}
+              disabled={processing || (!dump.trim() && files.length === 0)}
+              className="flex-1 py-3 rounded-xl font-semibold text-sm disabled:opacity-40 transition-colors"
+              style={{ backgroundColor: '#7c3aed', color: '#ffffff' }}
+            >
+              {processing ? '✨ Claude is reading everything…' : '✨ Process with AI'}
+            </button>
+          </div>
         </div>
 
         {/* Extracted Data Preview */}
