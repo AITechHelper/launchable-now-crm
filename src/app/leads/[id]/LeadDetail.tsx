@@ -114,6 +114,7 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
     meeting_notes: lead.meeting_notes || '',
     meeting_done: lead.meeting_done || false,
     latest_update: lead.latest_update || '',
+    site_url: lead.site_url || '',
   })
 
   function set(key: string, value: string | boolean | Review[]) {
@@ -394,23 +395,28 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
         </div>
       </div>
 
-      {/* Live Site Link — show whenever a site has been generated */}
-      {siteUrl && (
-        <div className="rounded-xl px-4 py-3 flex items-center justify-between gap-4" style={{ backgroundColor: '#0d1a0d', border: '1px solid #00FFB2' }}>
-          <div className="flex items-center gap-3 min-w-0">
-            <span className="text-base flex-shrink-0">🌐</span>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wider mb-0.5" style={{ color: '#00FFB2' }}>Live Site</p>
-              <p className="text-sm font-mono truncate" style={{ color: '#ffffff' }}>{siteUrl}</p>
-            </div>
-          </div>
+      {/* Live Site Link — always editable, view button appears when URL is set */}
+      <div className="rounded-xl px-4 py-3 flex items-center gap-3" style={{ backgroundColor: '#0d1a0d', border: `1px solid ${siteUrl || profile.site_url ? '#00FFB2' : '#2a4a2a'}` }}>
+        <span className="text-base flex-shrink-0">🌐</span>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: '#00FFB2' }}>Live Site URL</p>
+          <input
+            type="text"
+            value={siteUrl || ''}
+            onChange={(e) => { setSiteUrl(e.target.value); set('site_url', e.target.value) }}
+            placeholder="https://their-site.vercel.app"
+            className="w-full bg-transparent text-sm font-mono outline-none"
+            style={{ color: '#ffffff', caretColor: '#00FFB2' }}
+          />
+        </div>
+        {(siteUrl) && (
           <a href={siteUrl} target="_blank" rel="noopener noreferrer"
             className="px-4 py-2 rounded-lg text-sm font-semibold flex-shrink-0"
             style={{ backgroundColor: '#00FFB2', color: '#0d1a0d' }}>
             View ↗
           </a>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Latest Update — always visible at the top */}
       <div className="rounded-xl px-4 py-3 flex items-start gap-3" style={{ backgroundColor: '#1e2a1e', border: '1px solid #2a4a2a' }}>
