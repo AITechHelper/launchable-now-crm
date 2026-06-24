@@ -152,61 +152,91 @@ INSTRUCTIONS:
         }
         send(`  ✓ HTML generated (${Math.round(filledHtml.length / 1024)}KB)`)
 
-        // 5. Create GitHub repo
         const repoName = slugify(lead.business_name)
-        send(`Creating GitHub repo: ${repoName}…`)
 
+        // 5. Push to GitHub (source backup)
+        send('Pushing to GitHub…')
         const createRes = await githubApi(`/user/repos`, 'POST', {
           name: repoName,
           description: `Website for ${lead.business_name} — built by Launchable Now`,
           private: false,
           auto_init: false,
         })
-
-        if (!createRes.ok && createRes.data.errors?.[0]?.message?.includes('already exists')) {
-          send(`  Repo already exists — updating files…`)
-        } else if (!createRes.ok) {
-          return error(`Failed to create repo: ${createRes.data.message}`)
+        if (!createRes.ok && !createRes.data.errors?.[0]?.message?.includes('already exists')) {
+          send(`  Warning: Could not create GitHub repo — ${createRes.data.message}`)
         } else {
-          send(`  ✓ Repo created: github.com/${CLIENT_OWNER}/${repoName}`)
+          await new Promise((r) => setTimeout(r, 1500))
+          const existingFile = await githubApi(`/repos/${CLIENT_OWNER}/${repoName}/contents/index.html`)
+          const fileSha = existingFile.ok ? existingFile.data.sha : undefined
+          const pushRes = await githubApi(`/repos/${CLIENT_OWNER}/${repoName}/contents/index.html`, 'PUT', {
+            message: `Add website for ${lead.business_name}`,
+            content: Buffer.from(filledHtml).toString('base64'),
+            ...(fileSha ? { sha: fileSha } : {}),
+          })
+          if (pushRes.ok) send(`  ✓ GitHub: github.com/${CLIENT_OWNER}/${repoName}`)
+          else send(`  Warning: GitHub push failed — ${pushRes.data.message}`)
         }
 
-        // Small delay for repo initialization
-        await new Promise((r) => setTimeout(r, 1500))
+        // 6. Deploy to Vercel
+        send('Deploying to Vercel…')
+        const vercelToken = process.env.VERCEL_TOKEN
+        if (!vercelToken) return error('VERCEL_TOKEN not configured')
 
-        // 6. Push index.html
-        send('Pushing index.html…')
+        const projectName = repoName // e.g. client-a-b-pools
 
-        // Check if file exists first (for updates)
-        const existingFile = await githubApi(`/repos/${CLIENT_OWNER}/${repoName}/contents/index.html`)
-        const fileSha = existingFile.ok ? existingFile.data.sha : undefined
-
-        const pushRes = await githubApi(`/repos/${CLIENT_OWNER}/${repoName}/contents/index.html`, 'PUT', {
-          message: `Add website for ${lead.business_name}`,
-          content: Buffer.from(filledHtml).toString('base64'),
-          ...(fileSha ? { sha: fileSha } : {}),
+        const deployRes = await fetch('https://api.vercel.com/v13/deployments', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${vercelToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: projectName,
+            files: [
+              {
+                file: 'index.html',
+                data: filledHtml,
+                encoding: 'utf-8',
+              },
+            ],
+            projectSettings: { framework: null },
+            target: 'production',
+          }),
         })
 
-        if (!pushRes.ok) return error(`Failed to push HTML: ${pushRes.data.message}`)
-        send('  ✓ index.html pushed')
+        const deployData = await deployRes.json()
 
-        // 7. Enable GitHub Pages
-        send('Enabling GitHub Pages…')
-        const pagesRes = await githubApi(`/repos/${CLIENT_OWNER}/${repoName}/pages`, 'POST', {
-          source: { branch: 'main', path: '/' },
-        })
-
-        let siteUrl = `https://${CLIENT_OWNER.toLowerCase()}.github.io/${repoName}`
-        if (!pagesRes.ok && pagesRes.status !== 409) {
-          send(`  Warning: Could not enable Pages automatically (${pagesRes.data.message})`)
-          send(`  Enable manually: repo Settings → Pages → Deploy from main branch`)
-        } else {
-          send(`  ✓ GitHub Pages enabled`)
+        if (!deployRes.ok) {
+          return error(`Vercel deploy failed: ${deployData.error?.message || JSON.stringify(deployData)}`)
         }
 
-        send(`\n✅ Done! Site will be live in ~1 minute at:`)
+        // Wait for deployment to be ready
+        send('  Waiting for Vercel to go live…')
+        const deploymentId = deployData.id
+        let siteUrl = `https://${deployData.url}`
+        let attempts = 0
+
+        while (attempts < 20) {
+          await new Promise((r) => setTimeout(r, 3000))
+          const statusRes = await fetch(`https://api.vercel.com/v13/deployments/${deploymentId}`, {
+            headers: { Authorization: `Bearer ${vercelToken}` },
+          })
+          const statusData = await statusRes.json()
+          if (statusData.readyState === 'READY' || statusData.state === 'READY') {
+            siteUrl = `https://${statusData.url}`
+            break
+          }
+          if (statusData.readyState === 'ERROR' || statusData.state === 'ERROR') {
+            return error('Vercel deployment failed during build')
+          }
+          attempts++
+        }
+
+        // Save site URL to lead
+        await supabase.from('leads').update({ website_url: siteUrl }).eq('id', id)
+
+        send(`\n✅ Done! Site is live at:`)
         send(`   ${siteUrl}`)
-        send(`   GitHub: https://github.com/${CLIENT_OWNER}/${repoName}`)
 
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({
           done: true,
