@@ -15,7 +15,8 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const apiKey = request.headers.get('x-api-key')
   const validKey = process.env.CRM_API_KEY
-  if (validKey && apiKey !== validKey) {
+  // Only enforce API key for external requests (internal CRM calls have no key)
+  if (validKey && apiKey && apiKey !== validKey) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
