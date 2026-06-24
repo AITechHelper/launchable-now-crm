@@ -1,7 +1,6 @@
 import { createServerClient } from '@/lib/supabase-server'
 import Nav from '@/components/Nav'
 import Link from 'next/link'
-import StatusBadge from '@/components/StatusBadge'
 
 export const revalidate = 0
 
@@ -86,27 +85,27 @@ export default async function DashboardPage() {
           </div>
         )}
 
-        {/* Clients */}
+        {/* Active Clients */}
         <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
           <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #3a3a5c' }}>
             <div>
-              <h2 className="font-semibold" style={{ color: '#ffffff' }}>Clients</h2>
-              <p className="text-xs mt-0.5" style={{ color: '#6060a0' }}>Active and closed accounts</p>
+              <h2 className="font-semibold" style={{ color: '#ffffff' }}>Active Clients</h2>
+              <p className="text-xs mt-0.5" style={{ color: '#6060a0' }}>Leads marked Active or Closed</p>
             </div>
-            <Link href="/clients/new" className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ backgroundColor: '#00FFB2', color: '#0d1a0d' }}>
-              + Add Client
+            <Link href="/clients" className="text-xs px-3 py-1.5 rounded-lg" style={{ color: '#a0a0c0', border: '1px solid #3a3a5c' }}>
+              All Clients →
             </Link>
           </div>
           {allClients.length === 0 ? (
             <div className="px-6 py-12 text-center text-sm" style={{ color: '#a0a0c0' }}>
-              No clients yet. <Link href="/clients/new" style={{ color: '#00FFB2' }}>Add your first →</Link>
+              No active clients yet. Mark a lead as <span style={{ color: '#a78bfa' }}>Active</span> on their profile.
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr style={{ borderBottom: '1px solid #3a3a5c' }}>
-                    {['Business', 'Owner', 'City', 'Status', 'MRR'].map((h) => (
+                    {['Business', 'Owner', 'City', 'MRR'].map((h) => (
                       <th key={h} className="text-left px-6 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: '#6060a0' }}>{h}</th>
                     ))}
                   </tr>
@@ -121,8 +120,7 @@ export default async function DashboardPage() {
                       </td>
                       <td className="px-6 py-3 text-sm" style={{ color: '#a0a0c0' }}>{client.owner_name || '—'}</td>
                       <td className="px-6 py-3 text-sm" style={{ color: '#a0a0c0' }}>{client.city || '—'}</td>
-                      <td className="px-6 py-3"><StatusBadge status={client.status} /></td>
-                      <td className="px-6 py-3 text-sm" style={{ color: '#00FFB2' }}>
+                      <td className="px-6 py-3 text-sm font-medium" style={{ color: '#00FFB2' }}>
                         {client.mrr ? `$${client.mrr}/mo` : '—'}
                       </td>
                     </tr>
