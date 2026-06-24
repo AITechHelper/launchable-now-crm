@@ -69,7 +69,9 @@ ${dump || '(no text provided)'}`
   const text = response.content[0].type === 'text' ? response.content[0].text : ''
 
   try {
-    const extracted = JSON.parse(text.trim())
+    // Strip markdown code fences if Claude wrapped the JSON
+    const cleaned = text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim()
+    const extracted = JSON.parse(cleaned)
     return NextResponse.json({ extracted })
   } catch {
     return NextResponse.json({ error: 'AI returned invalid JSON', raw: text }, { status: 500 })

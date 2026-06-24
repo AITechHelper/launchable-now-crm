@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
@@ -79,6 +79,8 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
   const [saved, setSaved] = useState(false)
   const [dumpSaving, setDumpSaving] = useState(false)
   const [dumpSaved, setDumpSaved] = useState(false)
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [, startTransition] = useTransition()
   const [generating, setGenerating] = useState(false)
   const [genLogs, setGenLogs] = useState<string[]>([])
   const [siteUrl, setSiteUrl] = useState<string | null>(null)
@@ -179,6 +181,12 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
   }
 
   async function processWithAI() {
+    // Always save the dump first so nothing is lost
+    await fetch(`/api/leads/${lead.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ research_notes: dump }),
+    })
     setProcessing(true)
     setExtracted(null)
     const res = await fetch('/api/leads/process', {
@@ -193,7 +201,7 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
     const data = await res.json()
     setProcessing(false)
     if (data.extracted) setExtracted(data.extracted)
-    else alert(data.error || 'AI processing failed')
+    else alert(`AI processing failed: ${data.error || 'Unknown error'}${data.raw ? '\n\nRaw: ' + data.raw.slice(0, 300) : ''}`)
   }
 
   async function saveExtracted() {
@@ -298,7 +306,20 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
 
           <textarea
             value={dump}
-            onChange={(e) => setDump(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value
+              setDump(val)
+              if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+              autoSaveTimer.current = setTimeout(async () => {
+                await fetch(`/api/leads/${lead.id}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ research_notes: val }),
+                })
+                startTransition(() => { setDumpSaved(true) })
+                setTimeout(() => setDumpSaved(false), 2000)
+              }, 2000)
+            }}
             rows={10}
             placeholder={`Paste everything you found. Examples:\n\nhttps://facebook.com/austinplumbing\nhttps://maps.google.com/...\n(512) 555-0123\nMon-Fri 7am-6pm, Sat 8am-2pm\nServices: leak repair, water heaters, drain cleaning\n"Best plumber in Austin!" - Sarah M.\n"Fixed our broken pipe same day" - John D. ⭐⭐⭐⭐⭐\nIn business since 2008, family owned`}
             className="w-full px-4 py-3 rounded-lg text-sm outline-none resize-y font-mono"
