@@ -15,6 +15,7 @@ export default function Nav() {
   const links = [
     { href: '/', label: 'Dashboard' },
     { href: '/leads', label: 'Leads' },
+    { href: '/booked', label: 'Booked' },
     { href: '/clients', label: 'Clients' },
     { href: '/notes', label: 'Notes' },
   ]

@@ -112,25 +112,37 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
 
   function set(key: string, value: string | boolean | Review[]) {
     setProfile((p) => ({ ...p, [key]: value }))
+    setDirty(true)
   }
 
   useEffect(() => {
     if (genLogRef.current) genLogRef.current.scrollTop = genLogRef.current.scrollHeight
   }, [genLogs])
 
-  // Auto-save research notes 2s after typing stops
+  const [dirty, setDirty] = useState(false)
+
+  // Auto-save all profile fields 2s after any change
   useEffect(() => {
+    if (!dirty) return
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
-    autoSaveTimer.current = setTimeout(() => {
-      fetch(`/api/leads/${lead.id}`, {
+    autoSaveTimer.current = setTimeout(async () => {
+      await fetch(`/api/leads/${lead.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ research_notes: profile.research_notes }),
+        body: JSON.stringify({
+          ...profile,
+          mrr: parseFloat(profile.mrr) || 0,
+          one_time_fee: parseFloat(profile.one_time_fee) || 0,
+          status,
+        }),
       })
+      setSaved(true)
+      setDirty(false)
+      setTimeout(() => setSaved(false), 2000)
     }, 2000)
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile.research_notes])
+  }, [profile, dirty])
 
   async function updateStatus(newStatus: string) {
     setStatus(newStatus)
@@ -292,6 +304,7 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
           </span>
         </div>
         <div className="flex items-center gap-3 flex-shrink-0 pt-5">
+          {dirty && !saved && <span className="text-xs" style={{ color: '#6060a0' }}>Saving…</span>}
           {saved && <span className="text-sm font-medium" style={{ color: '#00FFB2' }}>Saved ✓</span>}
           <button onClick={saveProfile} disabled={saving}
             className="px-5 py-2 rounded-lg font-semibold text-sm disabled:opacity-50"

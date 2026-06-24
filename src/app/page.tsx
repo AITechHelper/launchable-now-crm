@@ -13,24 +13,14 @@ export default async function DashboardPage() {
     .order('created_at', { ascending: false })
 
   const leads = allLeads || []
+  const newLeads    = leads.filter((l) => l.status === 'new' || l.status === 'called')
   const bookedLeads = leads.filter((l) => l.status === 'booked')
   const activeClients = leads.filter((l) => l.status === 'active')
+  const closedClients = leads.filter((l) => l.status === 'closed')
 
-  const totalMRR = activeClients.reduce((sum, c) => sum + (c.mrr || 0), 0)
+  const totalMRR  = activeClients.reduce((sum, c) => sum + (c.mrr || 0), 0)
   const totalFees = leads.filter((l) => l.fee_collected).reduce((sum, c) => sum + (c.one_time_fee || 0), 0)
-  const totalRevenue = totalMRR + totalFees
-
   const fmt = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 0 })}`
-
-  const stats = [
-    { label: 'Total Revenue', value: fmt(totalRevenue), sub: `${fmt(totalFees)} fees + ${fmt(totalMRR)} MRR`, color: '#00FFB2' },
-    { label: 'Monthly MRR', value: fmt(totalMRR), sub: `from ${activeClients.length} active client${activeClients.length !== 1 ? 's' : ''}`, color: '#00FFB2' },
-    { label: 'Booked Leads', value: bookedLeads.length.toString(), sub: 'Ready to build', color: '#9B5FFF' },
-    { label: 'Active Clients', value: activeClients.length.toString(), sub: 'Paying clients', color: '#6699FF' },
-  ]
-
-  const allBookedLeads = bookedLeads
-  const allClients = activeClients
 
   return (
     <div style={{ backgroundColor: '#1a1a2e', minHeight: '100vh' }}>
@@ -40,95 +30,101 @@ export default async function DashboardPage() {
 
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {stats.map((stat) => (
-            <div key={stat.label} className="rounded-xl p-6" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
-              <p className="text-sm mb-1" style={{ color: '#a0a0c0' }}>{stat.label}</p>
-              <p className="text-3xl font-bold" style={{ color: stat.color }}>{stat.value}</p>
-              <p className="text-xs mt-1" style={{ color: '#6060a0' }}>{stat.sub}</p>
+          {[
+            { label: 'Monthly MRR',    value: fmt(totalMRR),  sub: `from ${activeClients.length} active client${activeClients.length !== 1 ? 's' : ''}`, color: '#00FFB2' },
+            { label: 'Total Revenue',  value: fmt(totalMRR + totalFees), sub: `${fmt(totalFees)} fees + ${fmt(totalMRR)} MRR`, color: '#00FFB2' },
+            { label: 'In Pipeline',    value: (newLeads.length + bookedLeads.length).toString(), sub: `${newLeads.length} leads · ${bookedLeads.length} booked`, color: '#9B5FFF' },
+            { label: 'Total Clients',  value: (activeClients.length + closedClients.length).toString(), sub: `${activeClients.length} active · ${closedClients.length} closed`, color: '#6699FF' },
+          ].map((s) => (
+            <div key={s.label} className="rounded-xl p-6" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
+              <p className="text-sm mb-1" style={{ color: '#a0a0c0' }}>{s.label}</p>
+              <p className="text-3xl font-bold" style={{ color: s.color }}>{s.value}</p>
+              <p className="text-xs mt-1" style={{ color: '#6060a0' }}>{s.sub}</p>
             </div>
           ))}
         </div>
 
-        {/* Booked Leads */}
-        {allBookedLeads.length > 0 && (
-          <div className="rounded-xl overflow-hidden mb-6" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
-            <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #3a3a5c' }}>
-              <div>
-                <h2 className="font-semibold" style={{ color: '#ffffff' }}>Booked Leads</h2>
-                <p className="text-xs mt-0.5" style={{ color: '#6060a0' }}>Meeting confirmed — ready to build their site</p>
-              </div>
-              <Link href="/leads" className="text-xs px-3 py-1.5 rounded-lg" style={{ color: '#a0a0c0', border: '1px solid #3a3a5c' }}>
-                All Leads →
-              </Link>
-            </div>
-            <div>
-              {allBookedLeads.map((lead: { id: string; business_name: string; phone?: string | null; city?: string | null; niche?: string | null }) => (
-                <div key={lead.id} className="px-6 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid #2a2a45' }}>
-                  <div className="flex items-center gap-6 min-w-0">
-                    <span className="font-medium truncate" style={{ color: '#ffffff' }}>{lead.business_name}</span>
-                    {lead.city && <span className="text-sm hidden sm:block" style={{ color: '#6060a0' }}>{lead.city}</span>}
-                    {lead.niche && <span className="text-sm hidden md:block" style={{ color: '#6060a0' }}>{lead.niche}</span>}
-                  </div>
-                  <div className="flex items-center gap-4 flex-shrink-0">
-                    {lead.phone && <span className="text-sm font-mono hidden sm:block" style={{ color: '#34d399' }}>{lead.phone}</span>}
-                    <Link
-                      href={`/leads/${lead.id}`}
-                      className="text-xs px-3 py-1.5 rounded-lg font-medium whitespace-nowrap"
-                      style={{ backgroundColor: '#4c1d95', color: '#c4b5fd', border: '1px solid #7c3aed' }}
-                    >
-                      → Research
-                    </Link>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Pipeline overview */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
 
-        {/* Active Clients */}
-        <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
-          <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #3a3a5c' }}>
-            <div>
-              <h2 className="font-semibold" style={{ color: '#ffffff' }}>Active Clients</h2>
-              <p className="text-xs mt-0.5" style={{ color: '#6060a0' }}>Leads marked Active or Closed</p>
+          {/* Leads */}
+          <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
+            <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid #3a3a5c' }}>
+              <h2 className="font-semibold text-sm" style={{ color: '#ffffff' }}>Leads <span style={{ color: '#6060a0' }}>({newLeads.length})</span></h2>
+              <Link href="/leads" className="text-xs px-2 py-1 rounded" style={{ color: '#6060a0', border: '1px solid #3a3a5c' }}>View all →</Link>
             </div>
-            <Link href="/clients" className="text-xs px-3 py-1.5 rounded-lg" style={{ color: '#a0a0c0', border: '1px solid #3a3a5c' }}>
-              All Clients →
-            </Link>
+            {newLeads.length === 0 ? (
+              <p className="px-5 py-8 text-xs text-center" style={{ color: '#6060a0' }}>No active leads</p>
+            ) : (
+              <div>
+                {newLeads.slice(0, 5).map((l) => (
+                  <Link key={l.id} href={`/leads/${l.id}`}
+                    className="flex items-center justify-between px-5 py-2.5 hover:bg-white/5 transition-colors"
+                    style={{ borderBottom: '1px solid #2a2a45' }}>
+                    <span className="text-sm font-medium truncate" style={{ color: '#ffffff' }}>{l.business_name}</span>
+                    <span className="text-xs ml-2 flex-shrink-0 px-2 py-0.5 rounded-full"
+                      style={{ backgroundColor: l.status === 'called' ? '#3a2e00' : '#1e3a5f', color: l.status === 'called' ? '#fbbf24' : '#60a5fa' }}>
+                      {l.status === 'called' ? 'Called' : 'New'}
+                    </span>
+                  </Link>
+                ))}
+                {newLeads.length > 5 && (
+                  <Link href="/leads" className="block px-5 py-2 text-xs" style={{ color: '#6060a0' }}>+{newLeads.length - 5} more</Link>
+                )}
+              </div>
+            )}
           </div>
-          {allClients.length === 0 ? (
-            <div className="px-6 py-12 text-center text-sm" style={{ color: '#a0a0c0' }}>
-              No active clients yet. Mark a lead as <span style={{ color: '#a78bfa' }}>Active</span> on their profile.
+
+          {/* Booked */}
+          <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#252540', border: '1px solid #00FFB2' }}>
+            <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid #1a3a2a' }}>
+              <h2 className="font-semibold text-sm" style={{ color: '#00FFB2' }}>Booked <span style={{ color: '#1a5a3a' }}>({bookedLeads.length})</span></h2>
+              <Link href="/booked" className="text-xs px-2 py-1 rounded" style={{ color: '#00FFB2', border: '1px solid #1a5a3a' }}>View all →</Link>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr style={{ borderBottom: '1px solid #3a3a5c' }}>
-                    {['Business', 'Owner', 'City', 'MRR'].map((h) => (
-                      <th key={h} className="text-left px-6 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: '#6060a0' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {allClients.map((client) => (
-                    <tr key={client.id} style={{ borderBottom: '1px solid #2a2a45' }}>
-                      <td className="px-6 py-3">
-                        <Link href={`/leads/${client.id}`} className="font-medium hover:underline" style={{ color: '#ffffff' }}>
-                          {client.business_name}
-                        </Link>
-                      </td>
-                      <td className="px-6 py-3 text-sm" style={{ color: '#a0a0c0' }}>{client.owner_name || '—'}</td>
-                      <td className="px-6 py-3 text-sm" style={{ color: '#a0a0c0' }}>{client.city || '—'}</td>
-                      <td className="px-6 py-3 text-sm font-medium" style={{ color: '#00FFB2' }}>
-                        {client.mrr ? `$${client.mrr}/mo` : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            {bookedLeads.length === 0 ? (
+              <p className="px-5 py-8 text-xs text-center" style={{ color: '#6060a0' }}>No booked prospects</p>
+            ) : (
+              <div>
+                {bookedLeads.slice(0, 5).map((l) => (
+                  <Link key={l.id} href={`/leads/${l.id}`}
+                    className="flex items-center justify-between px-5 py-2.5 hover:bg-white/5 transition-colors"
+                    style={{ borderBottom: '1px solid #1a3a2a' }}>
+                    <span className="text-sm font-medium truncate" style={{ color: '#ffffff' }}>{l.business_name}</span>
+                    <span className="text-xs" style={{ color: '#6060a0' }}>{l.city || ''}</span>
+                  </Link>
+                ))}
+                {bookedLeads.length > 5 && (
+                  <Link href="/booked" className="block px-5 py-2 text-xs" style={{ color: '#6060a0' }}>+{bookedLeads.length - 5} more</Link>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Active Clients */}
+          <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#252540', border: '1px solid #3a3a5c' }}>
+            <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid #3a3a5c' }}>
+              <h2 className="font-semibold text-sm" style={{ color: '#ffffff' }}>Clients <span style={{ color: '#6060a0' }}>({activeClients.length})</span></h2>
+              <Link href="/clients" className="text-xs px-2 py-1 rounded" style={{ color: '#6060a0', border: '1px solid #3a3a5c' }}>View all →</Link>
             </div>
-          )}
+            {activeClients.length === 0 ? (
+              <p className="px-5 py-8 text-xs text-center" style={{ color: '#6060a0' }}>No active clients yet</p>
+            ) : (
+              <div>
+                {activeClients.slice(0, 5).map((l) => (
+                  <Link key={l.id} href={`/leads/${l.id}`}
+                    className="flex items-center justify-between px-5 py-2.5 hover:bg-white/5 transition-colors"
+                    style={{ borderBottom: '1px solid #2a2a45' }}>
+                    <span className="text-sm font-medium truncate" style={{ color: '#ffffff' }}>{l.business_name}</span>
+                    <span className="text-sm font-medium" style={{ color: '#00FFB2' }}>{l.mrr ? `$${l.mrr}/mo` : '—'}</span>
+                  </Link>
+                ))}
+                {activeClients.length > 5 && (
+                  <Link href="/clients" className="block px-5 py-2 text-xs" style={{ color: '#6060a0' }}>+{activeClients.length - 5} more</Link>
+                )}
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
     </div>
