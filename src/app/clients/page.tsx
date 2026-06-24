@@ -10,7 +10,7 @@ export default async function ClientsPage() {
   const { data: clients } = await supabase
     .from('leads')
     .select('*')
-    .in('status', ['booked', 'active', 'closed'])
+    .in('status', ['active', 'closed'])
     .order('created_at', { ascending: false })
 
   const allClients = clients || []
@@ -34,7 +34,7 @@ export default async function ClientsPage() {
         {/* Quick stats */}
         <div className="grid grid-cols-3 gap-4 mb-6">
           {[
-            { label: 'Active Clients', value: allClients.filter(c => c.status === 'active' || c.status === 'booked').length, color: '#a78bfa' },
+            { label: 'Active Clients', value: allClients.filter(c => c.status === 'active').length, color: '#a78bfa' },
             { label: 'Monthly MRR', value: `$${totalMRR.toLocaleString()}`, color: '#00FFB2' },
             { label: 'Fees Collected', value: `$${totalFees.toLocaleString()}`, color: '#60a5fa' },
           ].map((s) => (
