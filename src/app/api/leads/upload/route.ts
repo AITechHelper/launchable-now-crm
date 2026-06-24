@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase-server'
+import { createClient } from '@supabase/supabase-js'
+
+function adminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  )
+}
 
 export async function POST(request: NextRequest) {
-  const supabase = createServerClient()
+  const supabase = adminClient()
 
   const formData = await request.formData()
   const leadId = formData.get('leadId') as string
@@ -22,7 +30,7 @@ export async function POST(request: NextRequest) {
     .from('lead-assets')
     .upload(path, buffer, { contentType: file.type || 'application/octet-stream', upsert: false })
 
-  if (error) return NextResponse.json({ error: error.message, path, bucket: 'lead-assets' }, { status: 500 })
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const { data: { publicUrl } } = supabase.storage
     .from('lead-assets')
@@ -32,7 +40,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const supabase = createServerClient()
+  const supabase = adminClient()
 
   const { path } = await request.json()
   if (!path) return NextResponse.json({ error: 'path required' }, { status: 400 })
