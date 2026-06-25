@@ -11,6 +11,7 @@ type Lead = {
   niche?: string | null
   status: string
   source?: string | null
+  website_url?: string | null
   created_at: string
 }
 
@@ -95,7 +96,7 @@ export default function LeadsTable({ initialLeads }: { initialLeads: Lead[] }) {
         <table className="w-full">
           <thead>
             <tr style={{ borderBottom: '1px solid #3a3a5c' }}>
-              {['Business', 'Phone', 'City', 'Niche', 'Status', 'Added', 'Actions'].map((h) => (
+              {['Business', 'Phone', 'City', 'Niche', 'Website', 'Status', 'Added', 'Actions'].map((h) => (
                 <th key={h} className="text-left px-5 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: '#6060a0' }}>{h}</th>
               ))}
             </tr>
@@ -111,6 +112,12 @@ export default function LeadsTable({ initialLeads }: { initialLeads: Lead[] }) {
                 <td className="px-5 py-3 text-sm font-mono" style={{ color: '#34d399' }}>{lead.phone || '—'}</td>
                 <td className="px-5 py-3 text-sm" style={{ color: '#a0a0c0' }}>{lead.city || '—'}</td>
                 <td className="px-5 py-3 text-sm" style={{ color: '#a0a0c0' }}>{lead.niche || '—'}</td>
+                <td className="px-5 py-3">
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                    style={{ backgroundColor: lead.website_url ? '#1e3a5f' : '#2a1a1a', color: lead.website_url ? '#60a5fa' : '#6060a0' }}>
+                    {lead.website_url ? 'Yes' : 'No'}
+                  </span>
+                </td>
                 <td className="px-5 py-3">
                   <span className="px-2 py-0.5 rounded-full text-xs font-semibold"
                     style={{ backgroundColor: lead.status === 'called' ? '#3a2e00' : '#1e3a5f', color: lead.status === 'called' ? '#fbbf24' : '#60a5fa' }}>
@@ -151,7 +158,7 @@ export default function LeadsTable({ initialLeads }: { initialLeads: Lead[] }) {
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-6 py-16 text-center text-sm" style={{ color: '#6060a0' }}>
+                <td colSpan={8} className="px-6 py-16 text-center text-sm" style={{ color: '#6060a0' }}>
                   {leads.length === 0
                     ? <span>No leads yet. <Link href="/leads" style={{ color: '#00FFB2' }}>Use lead finder or add manually.</Link></span>
                     : 'No leads match your search.'}
