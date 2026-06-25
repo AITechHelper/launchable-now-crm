@@ -140,13 +140,19 @@ INSTRUCTIONS:
 12. Return ONLY the complete HTML — no markdown, no explanation, nothing else.`
 
         const client = new Anthropic()
-        const response = await client.messages.create({
+        // Use streaming to handle large HTML outputs without timeout
+        let rawHtml = ''
+        const stream = client.messages.stream({
           model: 'claude-opus-4-8',
           max_tokens: 32000,
           messages: [{ role: 'user', content: prompt + '\n\nTEMPLATE HTML:\n' + templateHtml }],
         })
+        for await (const chunk of stream) {
+          if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+            rawHtml += chunk.delta.text
+          }
+        }
 
-        const rawHtml = response.content[0].type === 'text' ? response.content[0].text.trim() : ''
         // Strip any markdown code fences Claude might wrap it in
         const filledHtml = rawHtml.replace(/^```html\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim()
         if (!filledHtml.startsWith('<!DOCTYPE') && !filledHtml.startsWith('<html')) {
