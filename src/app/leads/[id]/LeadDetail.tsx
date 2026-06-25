@@ -36,6 +36,7 @@ type Lead = {
   meeting_notes?: string | null
   meeting_done?: boolean | null
   latest_update?: string | null
+  generation_status?: string | null
   created_at: string
 }
 
@@ -80,10 +81,9 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
   const [processing, setProcessing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [generating, setGenerating] = useState(false)
-  const [genLogs, setGenLogs] = useState<string[]>([])
+  const [generating, setGenerating] = useState(lead.generation_status === 'generating')
   const [siteUrl, setSiteUrl] = useState<string | null>(lead.site_url || null)
-  const genLogRef = useRef<HTMLDivElement>(null)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Single profile state — always pre-filled from lead
   const [status, setStatus] = useState(lead.status || 'new')
@@ -122,9 +122,25 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
     setDirty(true)
   }
 
+  // Poll for generation status when generating
   useEffect(() => {
-    if (genLogRef.current) genLogRef.current.scrollTop = genLogRef.current.scrollHeight
-  }, [genLogs])
+    if (!generating) return
+    pollRef.current = setInterval(async () => {
+      const res = await fetch(`/api/leads/${lead.id}/generate/status`)
+      const data = await res.json()
+      if (data.status === 'done') {
+        setGenerating(false)
+        if (data.siteUrl) setSiteUrl(data.siteUrl)
+        if (pollRef.current) clearInterval(pollRef.current)
+      } else if (data.status === 'error') {
+        setGenerating(false)
+        if (pollRef.current) clearInterval(pollRef.current)
+        alert('Site generation failed. Please try again.')
+      }
+    }, 4000)
+    return () => { if (pollRef.current) clearInterval(pollRef.current) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [generating])
 
   const [dirty, setDirty] = useState(false)
 
@@ -325,32 +341,12 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
   async function generateSite() {
     await saveProfile()
     setGenerating(true)
-    setGenLogs([])
-    const resp = await fetch(`/api/leads/${lead.id}/generate`, { method: 'POST' })
-    if (!resp.body) { setGenerating(false); return }
-    const reader = resp.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue
-        try {
-          const payload = JSON.parse(line.slice(6))
-          if (payload.log) setGenLogs((prev) => [...prev, payload.log])
-          if (payload.done) {
-            setSiteUrl(payload.siteUrl)
-            set('website_url', payload.siteUrl)
-          }
-          if (payload.error) setGenLogs((prev) => [...prev, `❌ ${payload.error}`])
-        } catch { /* ignore */ }
-      }
+    const res = await fetch(`/api/leads/${lead.id}/generate`, { method: 'POST' })
+    if (!res.ok) {
+      setGenerating(false)
+      alert('Failed to start generation. Please try again.')
     }
-    setGenerating(false)
+    // Polling starts automatically via useEffect above
   }
 
   async function handleDelete() {
@@ -658,7 +654,11 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="font-semibold" style={{ color: '#ffffff' }}>Generate Website</h2>
-            <p className="text-xs mt-1" style={{ color: '#a0a0c0' }}>Saves profile first, then Claude builds and deploys a custom site.</p>
+            <p className="text-xs mt-1" style={{ color: '#a0a0c0' }}>
+              {generating
+                ? 'Running in the background — you can close this tab and come back.'
+                : 'Saves profile first, then Claude builds and deploys a custom site.'}
+            </p>
           </div>
           <button onClick={generateSite} disabled={generating}
             className="px-6 py-3 rounded-xl font-semibold text-sm disabled:opacity-60"
@@ -666,24 +666,13 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
             {generating ? '⚙️ Generating…' : '🚀 Generate Site'}
           </button>
         </div>
-        {genLogs.length > 0 && (
-          <div ref={genLogRef} className="p-4 rounded-lg font-mono text-xs overflow-y-auto"
-            style={{ backgroundColor: '#0f0812', color: '#94a3b8', maxHeight: '200px', border: '1px solid #4c1d95' }}>
-            {genLogs.map((l, i) => (
-              <div key={i} style={{ color: l.startsWith('✅') || l.includes('✓') ? '#00FFB2' : l.startsWith('❌') ? '#ef4444' : l.startsWith('   ') ? '#c4b5fd' : '#94a3b8' }}>{l}</div>
-            ))}
-            {generating && <div style={{ color: '#a78bfa' }}>▋</div>}
-          </div>
-        )}
-        {siteUrl && (
-          <div className="p-4 rounded-xl flex items-center justify-between" style={{ backgroundColor: '#0d1a0d', border: '1px solid #00FFB2' }}>
+        {generating && (
+          <div className="flex items-center gap-3 p-4 rounded-lg" style={{ backgroundColor: '#0f0812', border: '1px solid #4c1d95' }}>
+            <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0" style={{ borderColor: '#a78bfa', borderTopColor: 'transparent' }} />
             <div>
-              <p className="text-xs font-semibold mb-1" style={{ color: '#00FFB2' }}>Site is live!</p>
-              <p className="text-sm font-mono" style={{ color: '#ffffff' }}>{siteUrl}</p>
+              <p className="text-sm font-medium" style={{ color: '#c4b5fd' }}>Building your site…</p>
+              <p className="text-xs mt-0.5" style={{ color: '#6060a0' }}>Claude is generating the HTML. This takes 2–4 minutes. Safe to leave the page.</p>
             </div>
-            <a href={siteUrl} target="_blank" rel="noopener noreferrer"
-              className="px-4 py-2 rounded-lg text-sm font-semibold ml-4 flex-shrink-0"
-              style={{ backgroundColor: '#00FFB2', color: '#0d1a0d' }}>View Site ↗</a>
           </div>
         )}
       </div>
