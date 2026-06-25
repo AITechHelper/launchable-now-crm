@@ -142,11 +142,13 @@ INSTRUCTIONS:
         const client = new Anthropic()
         const response = await client.messages.create({
           model: 'claude-opus-4-8',
-          max_tokens: 16000,
+          max_tokens: 32000,
           messages: [{ role: 'user', content: prompt + '\n\nTEMPLATE HTML:\n' + templateHtml }],
         })
 
-        const filledHtml = response.content[0].type === 'text' ? response.content[0].text.trim() : ''
+        const rawHtml = response.content[0].type === 'text' ? response.content[0].text.trim() : ''
+        // Strip any markdown code fences Claude might wrap it in
+        const filledHtml = rawHtml.replace(/^```html\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim()
         if (!filledHtml.startsWith('<!DOCTYPE') && !filledHtml.startsWith('<html')) {
           return error('Claude returned unexpected output — not valid HTML')
         }
@@ -154,28 +156,34 @@ INSTRUCTIONS:
 
         const repoName = slugify(lead.business_name)
 
-        // 5. Push to GitHub (source backup)
-        send('Pushing to GitHub…')
-        const createRes = await githubApi(`/user/repos`, 'POST', {
-          name: repoName,
-          description: `Website for ${lead.business_name} — built by Launchable Now`,
-          private: false,
-          auto_init: false,
-        })
-        if (!createRes.ok && !createRes.data.errors?.[0]?.message?.includes('already exists')) {
-          send(`  Warning: Could not create GitHub repo — ${createRes.data.message}`)
-        } else {
-          await new Promise((r) => setTimeout(r, 1500))
-          const existingFile = await githubApi(`/repos/${CLIENT_OWNER}/${repoName}/contents/index.html`)
-          const fileSha = existingFile.ok ? existingFile.data.sha : undefined
-          const pushRes = await githubApi(`/repos/${CLIENT_OWNER}/${repoName}/contents/index.html`, 'PUT', {
-            message: `Add website for ${lead.business_name}`,
-            content: Buffer.from(filledHtml).toString('base64'),
-            ...(fileSha ? { sha: fileSha } : {}),
-          })
-          if (pushRes.ok) send(`  ✓ GitHub: github.com/${CLIENT_OWNER}/${repoName}`)
-          else send(`  Warning: GitHub push failed — ${pushRes.data.message}`)
-        }
+        // 5. Push to GitHub (source backup) — fire and forget with timeout so it never blocks Vercel
+        send('Pushing to GitHub (background)…')
+        const githubTimeout = new Promise<void>((resolve) => setTimeout(resolve, 8000))
+        const githubPush = (async () => {
+          try {
+            const createRes = await githubApi(`/user/repos`, 'POST', {
+              name: repoName,
+              description: `Website for ${lead.business_name} — built by Launchable Now`,
+              private: false,
+              auto_init: false,
+            })
+            const repoReady = createRes.ok || createRes.data.errors?.[0]?.message?.includes('already exists')
+            if (repoReady) {
+              await new Promise((r) => setTimeout(r, 1500))
+              const existingFile = await githubApi(`/repos/${CLIENT_OWNER}/${repoName}/contents/index.html`)
+              const fileSha = existingFile.ok ? existingFile.data.sha : undefined
+              await githubApi(`/repos/${CLIENT_OWNER}/${repoName}/contents/index.html`, 'PUT', {
+                message: `Add website for ${lead.business_name}`,
+                content: Buffer.from(filledHtml).toString('base64'),
+                ...(fileSha ? { sha: fileSha } : {}),
+              })
+              send(`  ✓ GitHub backup saved`)
+            }
+          } catch {
+            send(`  GitHub backup skipped`)
+          }
+        })()
+        await Promise.race([githubPush, githubTimeout])
 
         // 6. Deploy to Vercel
         send('Deploying to Vercel…')
@@ -233,7 +241,7 @@ INSTRUCTIONS:
         }
 
         // Save site URL to lead
-        await supabase.from('leads').update({ website_url: siteUrl }).eq('id', id)
+        await supabase.from('leads').update({ site_url: siteUrl }).eq('id', id)
 
         send(`\n✅ Done! Site is live at:`)
         send(`   ${siteUrl}`)
